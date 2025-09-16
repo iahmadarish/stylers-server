@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Order Confirmation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: #0d1c3d;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header img {
+            max-height: 60px;
+        }
+
+        .content {
+            padding: 25px;
+        }
+
+        h2 {
+            color: #0d1c3d;
+            margin-top: 0;
+        }
+
+        .order-summary {
+            margin: 20px 0;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .order-summary th,
+        .order-summary td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .order-summary th {
+            background: #f0f0f0;
+        }
+
+        .btn {
+            display: inline-block;
+            margin: 20px 0;
+            padding: 12px 20px;
+            background: #0d1c3d;
+            color: #fff !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        .footer {
+            background: #fafafa;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #777;
+            border-top: 1px solid #eee;
+        }
+
+        .social-icons a {
+            margin: 0 8px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .social-icons img {
+            width: 22px;
+            height: 22px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header with logo -->
+        <div class="header">
+            <img src="https://paarel.com/assets/01-B-KQiC7Y.png" alt="PAAREL Logo">
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <h2>Welcome, {{customerName}} 🎉</h2>
+            <p>Thank you for shopping with <strong>PAAREL</strong>! Your order has been received and is being processed.
+            </p>
+
+            <h3>📦 Order Details</h3>
+            <table class="order-summary">
+                <tr>
+                    <th>Order Number</th>
+                    <td>{{orderNumber}}</td>
+                </tr>
+                <tr>
+                    <th>Order Date</th>
+                    <td>{{orderDate}}</td>
+                </tr>
+                <tr>
+                    <th>Payment Method</th>
+                    <td>{{paymentMethod}}</td>
+                </tr>
+                <tr>
+                    <th>Total Amount</th>
+                    <td><strong>{{totalAmount}}</strong></td>
+                </tr>
+            </table>
+
+            {{#if isGuest}}
+            <p style="margin-top: 20px;">👉 You can track your order using the link below:</p>
+            <p>
+                <a href="https://paarel.com/track-order?orderNumber={{orderNumber}}&email={{email}}" class="btn">
+                    Track My Order
+                </a>
+            </p>
+            {{else}}
+            <p style="margin-top: 20px;">👉 You can view all your orders from your profile dashboard:</p>
+            <p>
+                <a href="https://paarel.com/profile/orders" class="btn">
+                    Visit My Orders
+                </a>
+            </p>
+            {{/if}}
+
+
+            <h3>🛍️ Ordered Items</h3>
+            <table class="order-summary">
+                <tr>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                </tr>
+                {{#each items}}
+                <tr>
+                    <td>{{this.productTitle}}</td>
+                    <td>{{this.quantity}}</td>
+                    <td>৳{{this.discountedPrice}}</td>
+                </tr>
+                {{/each}}
+            </table>
+
+            <p style="margin-top: 25px;">If you have any questions, feel free to contact our support team.</p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Need help? Contact us at <a href="mailto:support@paarel.com">support@paarel.com</a></p>
+            <div class="social-icons">
+                <a href="https://facebook.com/paarel" target="_blank">
+                    <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" alt="Facebook">
+                </a>
+                <a href="https://instagram.com/paarel" target="_blank">
+                    <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" alt="Instagram">
+                </a>
+            </div>
+            <p>&copy; {{currentYear}} PAAREL. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>

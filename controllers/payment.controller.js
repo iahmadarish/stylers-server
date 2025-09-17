@@ -1221,13 +1221,15 @@ formData.append(
       cus_add1: shippingAddress.address.substring(0, 50),
       cus_city: shippingAddress.city || "Dhaka",
       cus_country: shippingAddress.country || "Bangladesh",
-      // success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
-      // fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
-      // cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
+      success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
+      fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
+      cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
 
-success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
-fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
-cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
+// success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
+// fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
+// cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
+
+
 
 
       // Gateway callback  notify_url (server-side POST callback)

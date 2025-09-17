@@ -638,7 +638,16 @@ export const paymentSuccess = async (req, res) => {
     console.log("Query:", req.query);
     console.log("Body:", req.body);
 
-    const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
+    let tran_id;
+    // POST request হলে req.body থেকে tran_id নাও, এটি সবচেয়ে নির্ভরযোগ্য
+    if (req.method === "POST") {
+      tran_id = req.body?.tran_id;
+    }
+
+    // যদি POST request-এ tran_id না থাকে, অথবা GET request হয়, তখন params বা query থেকে নাও
+    if (!tran_id) {
+      tran_id = req.params.transactionId || req.query?.tran_id;
+    }
 
     if (!tran_id) {
       if (req.method === "GET") {

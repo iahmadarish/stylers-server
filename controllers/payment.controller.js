@@ -1225,6 +1225,7 @@ formData.append(
       fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
       cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
 
+
 // success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
 // fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
 // cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
@@ -1233,7 +1234,7 @@ formData.append(
 
 
       // Gateway callback  notify_url (server-side POST callback)
-      notify_url: `${process.env.BACKEND_URL}/payment/notify`,
+      notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: 'json'
     };
 

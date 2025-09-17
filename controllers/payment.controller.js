@@ -630,6 +630,7 @@ export const initializePayment = async (req, res) => {
 // UPDATED: Handle payment success - now handles both user and guest orders
 // UPDATED: Handle payment success - Fixed version
 // CORRECTED: Handle payment success without separate verification API
+// UPDATED: Handle payment success - Fixed version
 export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Request ===");
@@ -638,16 +639,7 @@ export const paymentSuccess = async (req, res) => {
     console.log("Query:", req.query);
     console.log("Body:", req.body);
 
-    let tran_id;
-    // POST request হলে req.body থেকে tran_id নাও, এটি সবচেয়ে নির্ভরযোগ্য
-    if (req.method === "POST") {
-      tran_id = req.body?.tran_id;
-    }
-
-    // যদি POST request-এ tran_id না থাকে, অথবা GET request হয়, তখন params বা query থেকে নাও
-    if (!tran_id) {
-      tran_id = req.params.transactionId || req.query?.tran_id;
-    }
+    const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
 
     if (!tran_id) {
       if (req.method === "GET") {
@@ -729,7 +721,7 @@ export const paymentSuccess = async (req, res) => {
         productTitle: item.productTitle || "Unknown Product",
         productImage: item.productImage || "/placeholder.svg",
         variantId: item.variantId || null,
-        colorVariantId: item.colorVariantId || null, // Keep as string
+        colorVariantId: item.colorVariantId || null,
         quantity: item.quantity || 1,
         originalPrice: item.originalPrice || 0,
         discountedPrice: item.discountedPrice || item.originalPrice || 0,
@@ -760,10 +752,9 @@ export const paymentSuccess = async (req, res) => {
         couponCode: guestOrderData.couponCode || null,
         couponDiscount: 0,
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed",
-        paymentStatus: "paid",
+        status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
+        paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
         transactionId: tran_id,
-        // Store Aamarpay response data
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid,
           bank_txn: callbackData.bank_txn,
@@ -814,7 +805,7 @@ export const paymentSuccess = async (req, res) => {
         },
       });
     } else {
-      // Regular order processing (existing code)
+      // Regular order processing
       const order = await Order.findOne({ transactionId: tran_id });
       if (!order) {
         console.log("Order not found for transaction ID:", tran_id);
@@ -824,7 +815,7 @@ export const paymentSuccess = async (req, res) => {
         });
       }
 
-      // Update order status
+      // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
       order.paymentStatus = "paid";
       order.status = "confirmed";
 
@@ -911,6 +902,20 @@ export const paymentSuccess = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // UPDATED: Payment notification handler (for server-side callbacks)
 export const paymentNotify = async (req, res) => {

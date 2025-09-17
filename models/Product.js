@@ -313,12 +313,27 @@ productSchema.methods.updateStockStatus = function () {
   }
 };
 
-productSchema.pre("save", function (next) {
+productSchema.pre("save", async  function (next) {
   console.log("=== PRE-SAVE HOOK TRIGGERED ===")
 
   // Generate slug from title
-  if (this.isModified("title")) {
-    this.slug = slugify(this.title, { lower: true })
+   if (this.isModified("title") || this.isNew) {
+    let baseSlug = slugify(this.title, { lower: true });
+    let finalSlug = baseSlug;
+    let counter = 1;
+
+    // Check if slug already exists
+    while (true) {
+      const existingProduct = await mongoose.models.Product.findOne({ slug: finalSlug });
+      if (!existingProduct || (this._id && existingProduct._id.equals(this._id))) {
+        break;
+      }
+      finalSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    this.slug = finalSlug;
+    console.log(`Generated slug: ${this.slug}`);
   }
 
   // ✅ Calculate main product price with time validation

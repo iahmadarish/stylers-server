@@ -911,18 +911,20 @@ export const initializePayment = async (req, res) => {
 
 
 
-// UPDATED: Handle payment success - Fixed version
+// payment.controller.js এ paymentSuccess function টি এই সরলীকৃত version দিয়ে replace করুন:
+
 export const paymentSuccess = async (req, res) => {
   try {
-    console.log("=== Payment Success Request ===");
+    console.log("=== Payment Success Handler ===");
     console.log("Method:", req.method);
     console.log("Params:", req.params);
-    console.log("Query:", req.query);
     console.log("Body:", req.body);
+    console.log("Query:", req.query);
 
     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
 
     if (!tran_id) {
+      console.log("Transaction ID missing");
       if (req.method === "GET") {
         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
       }
@@ -932,35 +934,25 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // GET request হলে শুধু frontend-এ redirect করবে
+    // GET request হলে শুধু frontend এ redirect করবে (user browser redirect)
     if (req.method === "GET") {
-      console.log("GET request received for payment success, redirecting to frontend");
+      console.log("GET request - redirecting user to frontend");
       
-      // Check if it's a guest order
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
-        const order = await Order.findOne({ transactionId: tran_id });
-        if (order) {
-          return res.redirect(`${process.env.FRONTEND_URL}/order-success/${order._id}`);
-        } else {
-          return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=order_not_found`);
-        }
+        return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}`);
       }
     }
 
-    // POST request হলে এটি Aamarpay থেকে server callback (IPN)
-    console.log("POST request received - This is Aamarpay server callback");
-    console.log("Callback data:", req.body);
-
-    // Aamarpay callback data validation
+    // POST request - এটি Aamarpay থেকে server callback
+    console.log("POST request - Processing payment callback from Aamarpay");
+    
     const callbackData = req.body;
-
-    // Check if payment was successful
-    const isPaymentSuccessful = callbackData.pay_status === "Successful";
-
-    if (!isPaymentSuccessful) {
-      console.log("Payment was not successful:", callbackData.pay_status);
+    
+    // Payment status check
+    if (callbackData.pay_status !== "Successful") {
+      console.log("Payment not successful:", callbackData.pay_status);
       return res.status(400).json({
         success: false,
         message: "Payment was not successful",
@@ -968,74 +960,60 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // Verify store credentials match (security check)
+    // Store ID verification
     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-      console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
+      console.log("Store ID mismatch");
       return res.status(400).json({
         success: false,
         message: "Store ID verification failed"
       });
     }
 
-    console.log("Payment verification successful via callback");
+    console.log("Payment verification successful");
 
-    // গেস্ট অর্ডার কিনা চেক করো
+    // Guest order processing
     if (tran_id.startsWith("GUEST_TXN_")) {
+      console.log("Processing guest order payment");
+      
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
       const guestOrderData = global.pendingGuestOrders.get(tran_id);
 
       if (!guestOrderData) {
-        console.log("Guest order data not found for:", tran_id);
+        console.log("Guest order data not found");
         return res.status(404).json({
           success: false,
           message: "Guest order data not found"
         });
       }
 
-      // Create guest order
+      // Create guest order - simplified
       const orderCount = await Order.countDocuments();
       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
-
-      // Ensure all required fields are present
-      const orderItems = guestOrderData.items.map(item => ({
-        productId: item.productId,
-        productTitle: item.productTitle || "Unknown Product",
-        productImage: item.productImage || "/placeholder.svg",
-        variantId: item.variantId || null,
-        colorVariantId: item.colorVariantId || null,
-        quantity: item.quantity || 1,
-        originalPrice: item.originalPrice || 0,
-        discountedPrice: item.discountedPrice || item.originalPrice || 0,
-        discountPercentage: item.discountPercentage || 0,
-        totalOriginalPrice: item.totalOriginalPrice || (item.originalPrice || 0) * (item.quantity || 1),
-        totalDiscountedPrice: item.totalDiscountedPrice || (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-        discountAmount: item.discountAmount || ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
-      }));
-
-      const subtotal = guestOrderData.subtotal || orderItems.reduce((sum, item) => sum + item.totalDiscountedPrice, 0);
 
       const order = new Order({
         isGuestOrder: true,
         guestCustomerInfo: {
-          name: guestOrderData.shippingAddress.fullName,
-          email: guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email || "",
-          phone: guestOrderData.shippingAddress.phone || guestOrderData.customerInfo?.phone,
+          name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
+          email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
+          phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
         },
         orderNumber,
-        items: orderItems,
-        subtotal: subtotal,
+        transactionId: tran_id,
+        items: guestOrderData.items,
+        subtotal: guestOrderData.subtotal,
         totalDiscount: guestOrderData.totalDiscount || 0,
         shippingCost: guestOrderData.shippingCost,
         tax: 0,
         totalAmount: guestOrderData.totalAmount,
         shippingAddress: guestOrderData.shippingAddress,
+        billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
         paymentMethod: "card",
-        couponCode: guestOrderData.couponCode || null,
-        couponDiscount: 0,
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
-        paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
-        transactionId: tran_id,
+        
+        // ✅ এই দুটি field সবচেয়ে গুরুত্বপূর্ণ
+        status: "confirmed",
+        paymentStatus: "paid",
+        
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid,
           bank_txn: callbackData.bank_txn,
@@ -1048,80 +1026,73 @@ export const paymentSuccess = async (req, res) => {
       });
 
       await order.save();
+      console.log("✅ Guest order created successfully:", order.orderNumber);
 
       // Update product stock
-      try {
-        await updateProductStock(orderItems);
-        console.log("Product stock updated for guest order");
-      } catch (stockError) {
-        console.error("Error updating product stock:", stockError);
+      if (guestOrderData.items && guestOrderData.items.length > 0) {
+        await updateProductStock(guestOrderData.items);
+        console.log("✅ Product stock updated");
       }
 
-      // Clean up
+      // Clean up pending data
       global.pendingGuestOrders.delete(tran_id);
-      console.log("Guest order created successfully:", order.orderNumber);
 
-      // Send confirmation email
+      // Send email
       try {
-        const toEmail = guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email;
+        const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
         if (toEmail) {
           await sendOrderEmails(order, toEmail);
-          console.log("✅ Guest order confirmation email sent");
+          console.log("✅ Guest confirmation email sent");
         }
-      } catch (mailError) {
-        console.error("❌ Failed to send guest confirmation email:", mailError);
+      } catch (emailError) {
+        console.error("❌ Email sending failed:", emailError.message);
       }
 
       return res.status(200).json({
         success: true,
         message: "Guest order payment successful",
-        data: {
-          order: {
-            _id: order._id,
-            orderNumber: order.orderNumber,
-            totalAmount: order.totalAmount,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-          },
-        },
+        data: { orderId: order._id, orderNumber: order.orderNumber }
       });
-    } else {
-      // Regular order processing
-      const order = await Order.findOne({ transactionId: tran_id });
-      if (!order) {
-        console.log("Order not found for transaction ID:", tran_id);
-        return res.status(404).json({
-          success: false,
-          message: "Order not found"
-        });
-      }
+    }
 
-      // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
-      order.paymentStatus = "paid";
-      order.status = "confirmed";
+    // Regular user order processing
+    console.log("Processing regular user order payment");
+    
+    const order = await Order.findOne({ transactionId: tran_id });
+    if (!order) {
+      console.log("Order not found for transaction ID:", tran_id);
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
+    }
 
-      // Store payment gateway response
-      order.paymentGatewayResponse = {
-        pg_txnid: callbackData.pg_txnid,
-        bank_txn: callbackData.bank_txn,
-        card_type: callbackData.card_type,
-        pay_time: callbackData.pay_time,
-        amount: callbackData.amount,
-        store_amount: callbackData.store_amount,
-        currency: callbackData.currency
-      };
+    // ✅ এখানেই মূল সমস্যা ছিল - status এবং paymentStatus update
+    order.status = "confirmed";
+    order.paymentStatus = "paid";
+    
+    // Store gateway response
+    order.paymentGatewayResponse = {
+      pg_txnid: callbackData.pg_txnid,
+      bank_txn: callbackData.bank_txn,
+      card_type: callbackData.card_type,
+      pay_time: callbackData.pay_time,
+      amount: callbackData.amount,
+      store_amount: callbackData.store_amount,
+      currency: callbackData.currency
+    };
 
-      await order.save();
+    await order.save();
+    console.log("✅ Order payment confirmed:", order.orderNumber);
 
-      // Update product stock
-      try {
-        await updateProductStock(order.items);
-        console.log("Product stock updated for regular order");
-      } catch (stockError) {
-        console.error("Error updating product stock:", stockError);
-      }
+    // Update product stock
+    if (order.items && order.items.length > 0) {
+      await updateProductStock(order.items);
+      console.log("✅ Product stock updated");
+    }
 
-      // Clear user's cart
+    // Clear user's cart
+    if (order.userId) {
       try {
         await Cart.findOneAndUpdate(
           { userId: order.userId },
@@ -1135,42 +1106,32 @@ export const paymentSuccess = async (req, res) => {
             },
           }
         );
-        console.log("Cart cleared for user:", order.userId);
+        console.log("✅ Cart cleared for user");
       } catch (cartError) {
-        console.error("Error clearing cart:", cartError);
+        console.error("❌ Error clearing cart:", cartError.message);
       }
-
-      console.log("Order payment confirmed successfully:", order.orderNumber);
-
-      // Send confirmation email
-      try {
-        const user = await User.findById(order.userId);
-        const toEmail = order?.shippingAddress?.email || user?.email;
-        if (toEmail) {
-          await sendOrderEmails(order, toEmail);
-          console.log("✅ Order confirmation email sent");
-        }
-      } catch (mailError) {
-        console.error("❌ Failed to send confirmation email:", mailError);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Payment successful",
-        data: {
-          order: {
-            _id: order._id,
-            orderNumber: order.orderNumber,
-            totalAmount: order.totalAmount,
-            status: order.status,
-            paymentStatus: order.paymentStatus,
-          },
-        },
-      });
     }
 
+    // Send confirmation email
+    try {
+      const user = order.userId ? await User.findById(order.userId) : null;
+      const toEmail = order?.shippingAddress?.email || user?.email;
+      if (toEmail) {
+        await sendOrderEmails(order, toEmail);
+        console.log("✅ Order confirmation email sent");
+      }
+    } catch (emailError) {
+      console.error("❌ Email sending failed:", emailError.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment successful",
+      data: { orderId: order._id, orderNumber: order.orderNumber }
+    });
+
   } catch (error) {
-    console.error("Payment success handler error:", error);
+    console.error("❌ Payment success handler error:", error);
 
     if (req.method === "GET") {
       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
@@ -1534,9 +1495,14 @@ formData.append(
       cus_add1: shippingAddress.address.substring(0, 50),
       cus_city: shippingAddress.city || "Dhaka",
       cus_country: shippingAddress.country || "Bangladesh",
-      success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
-      fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
-      cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
+      // success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
+      // fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
+      // cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
+
+
+  success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
+  fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
+  cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
 
 
 // success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,

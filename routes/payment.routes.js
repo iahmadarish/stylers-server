@@ -50,7 +50,7 @@ router.route("/cancel/:transactionId")
 /**
  * AamarPay IPN route (always POST)
  */
-router.post("/notify", handleIPN);
+// router.post("/notify", handleIPN);
 
 
 router.post('/notify', paymentNotify); // Aamarpay server callback

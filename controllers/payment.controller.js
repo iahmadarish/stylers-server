@@ -1049,13 +1049,19 @@ export const paymentSuccess = async (req, res) => {
     console.log("Processing regular user order payment");
 
     const order = await Order.findOne({ transactionId: tran_id });
+    console.log("Found order:", order ? order._id : "NOT FOUND");
 
-if (order) {
-  // ✅ YOU MUST EXPLICITLY UPDATE THESE FIELDS:
-  order.status = "confirmed";        // This was missing
-  order.paymentStatus = "paid";      // This was missing
-  await order.save();                // This must be called
-}
+ if (order) {
+      console.log("Before update - Status:", order.status, "Payment Status:", order.paymentStatus);
+      
+      order.status = "confirmed";
+      order.paymentStatus = "paid";
+      
+      console.log("After update - Status:", order.status, "Payment Status:", order.paymentStatus);
+      
+      await order.save();
+      console.log("Order saved successfully");
+    }
 
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);

@@ -913,6 +913,7 @@ export const initializePayment = async (req, res) => {
 
 // payment.controller.js এ paymentSuccess function টি এই সরলীকৃত version দিয়ে replace করুন:
 
+// UPDATED: Handle payment success - Fixed version
 export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Handler ===");
@@ -934,10 +935,10 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-
+    // Handle GET request (user redirect)
     if (req.method === "GET") {
       console.log("GET request - redirecting user to frontend");
-
+      
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
@@ -945,12 +946,10 @@ export const paymentSuccess = async (req, res) => {
       }
     }
 
-
     console.log("POST request - Processing payment callback from Aamarpay");
-
     const callbackData = req.body;
 
-
+    // Verify payment was successful
     if (callbackData.pay_status !== "Successful") {
       console.log("Payment not successful:", callbackData.pay_status);
       return res.status(400).json({
@@ -960,7 +959,7 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-
+    // Verify store ID
     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
       console.log("Store ID mismatch");
       return res.status(400).json({
@@ -971,11 +970,12 @@ export const paymentSuccess = async (req, res) => {
 
     console.log("Payment verification successful");
 
-
+    // Handle guest orders
     if (tran_id.startsWith("GUEST_TXN_")) {
       console.log("Processing guest order payment");
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
       const guestOrderData = global.pendingGuestOrders.get(tran_id);
+      
       if (!guestOrderData) {
         console.log("Guest order data not found");
         return res.status(404).json({
@@ -983,6 +983,7 @@ export const paymentSuccess = async (req, res) => {
           message: "Guest order data not found"
         });
       }
+      
       const orderCount = await Order.countDocuments();
       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
 
@@ -1005,8 +1006,8 @@ export const paymentSuccess = async (req, res) => {
         billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
         paymentMethod: "card",
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed",
-        paymentStatus: "paid",
+        status: "confirmed", // ✅ Set status to confirmed
+        paymentStatus: "paid", // ✅ Set payment status to paid
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid,
           bank_txn: callbackData.bank_txn,
@@ -1026,8 +1027,10 @@ export const paymentSuccess = async (req, res) => {
         await updateProductStock(guestOrderData.items);
         console.log("Product stock updated");
       }
+      
       // Clean up pending data
       global.pendingGuestOrders.delete(tran_id);
+      
       // Send email
       try {
         const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
@@ -1038,6 +1041,7 @@ export const paymentSuccess = async (req, res) => {
       } catch (emailError) {
         console.error("Email sending failed:", emailError.message);
       }
+      
       return res.status(200).json({
         success: true,
         message: "Guest order payment successful",
@@ -1045,10 +1049,10 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // Regular user order processing
+    // Handle regular user orders
     console.log("Processing regular user order payment");
-
     const order = await Order.findOne({ transactionId: tran_id });
+    
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);
       return res.status(404).json({
@@ -1057,9 +1061,10 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    //  paymentStatus update
+    // ✅ Update paymentStatus and status for regular orders
     order.status = "confirmed";
     order.paymentStatus = "paid";
+    
     // Store gateway response
     order.paymentGatewayResponse = {
       pg_txnid: callbackData.pg_txnid,
@@ -1070,13 +1075,16 @@ export const paymentSuccess = async (req, res) => {
       store_amount: callbackData.store_amount,
       currency: callbackData.currency
     };
+    
     await order.save();
     console.log("Order payment confirmed:", order.orderNumber);
+    
     // Update product stock
     if (order.items && order.items.length > 0) {
       await updateProductStock(order.items);
       console.log("Product stock updated");
     }
+    
     // Clear user's cart
     if (order.userId) {
       try {
@@ -1097,6 +1105,7 @@ export const paymentSuccess = async (req, res) => {
         console.error("Error clearing cart:", cartError.message);
       }
     }
+    
     // Send confirmation email
     try {
       const user = order.userId ? await User.findById(order.userId) : null;

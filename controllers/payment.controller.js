@@ -1144,18 +1144,41 @@ export const initializeAamarpayPayment = async (req, res) => {
     formData.append('cus_add1', shippingAddress.address.substring(0, 50));
     formData.append('cus_city', shippingAddress.city || "Dhaka");
     formData.append('cus_country', shippingAddress.country || "Bangladesh");
-   formData.append(
-  'success_url',
-  `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
-);  // User browser redirect
- formData.append(
-  'fail_url',
-  `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
-);
+
+//    formData.append(
+//   'success_url',
+//   `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
+// );  // User browser redirect
+//  formData.append(
+//   'fail_url',
+//   `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
+// );
+// formData.append(
+//   'cancel_url',
+//   `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
+// );
+
 formData.append(
-  'cancel_url',
-  `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
+-  'success_url',
+-  `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
++  'success_url',
++  `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`
+);  // Aamarpay POST করবে backend-এ
+
+formData.append(
+-  'fail_url',
+-  `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
++  'fail_url',
++  `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`
 );
+
+formData.append(
+-  'cancel_url',
+-  `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
++  'cancel_url',
++  `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`
+);
+
 
     // Server-side verification (callback)
     formData.append('notify_url', `${process.env.BACKEND_URL}/api/payment/notify`);

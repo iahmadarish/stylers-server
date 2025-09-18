@@ -916,15 +916,28 @@ export const initializePayment = async (req, res) => {
 export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Handler ===");
-    
+    console.log("Method:", req.method);
+    console.log("Params:", req.params);
+    console.log("Body:", req.body);
+    console.log("Query:", req.query);
+
     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-    
+
     if (!tran_id) {
-      return res.status(400).json({ success: false, message: "Transaction ID missing" });
+      console.log("Transaction ID missing");
+      if (req.method === "GET") {
+        return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
+      }
+      return res.status(400).json({
+        success: false,
+        message: "Transaction ID missing",
+      });
     }
 
-    // Handle GET requests (frontend redirect)
+
     if (req.method === "GET") {
+      console.log("GET request - redirecting user to frontend");
+
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
@@ -932,25 +945,132 @@ export const paymentSuccess = async (req, res) => {
       }
     }
 
-    // Handle POST requests (Aamarpay callback)
+
+    console.log("POST request - Processing payment callback from Aamarpay");
+
     const callbackData = req.body;
-    
-    // Verify payment was successful
+
+
     if (callbackData.pay_status !== "Successful") {
-      return res.status(400).json({ success: false, message: "Payment not successful" });
+      console.log("Payment not successful:", callbackData.pay_status);
+      return res.status(400).json({
+        success: false,
+        message: "Payment was not successful",
+        paymentStatus: callbackData.pay_status
+      });
     }
 
-    // Find the order by transaction ID
+
+    if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
+      console.log("Store ID mismatch");
+      return res.status(400).json({
+        success: false,
+        message: "Store ID verification failed"
+      });
+    }
+
+    console.log("Payment verification successful");
+
+
+    if (tran_id.startsWith("GUEST_TXN_")) {
+      console.log("Processing guest order payment");
+      global.pendingGuestOrders = global.pendingGuestOrders || new Map();
+      const guestOrderData = global.pendingGuestOrders.get(tran_id);
+      if (!guestOrderData) {
+        console.log("Guest order data not found");
+        return res.status(404).json({
+          success: false,
+          message: "Guest order data not found"
+        });
+      }
+      const orderCount = await Order.countDocuments();
+      const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
+
+      const order = new Order({
+        isGuestOrder: true,
+        guestCustomerInfo: {
+          name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
+          email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
+          phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
+        },
+        orderNumber,
+        transactionId: tran_id,
+        items: guestOrderData.items,
+        subtotal: guestOrderData.subtotal,
+        totalDiscount: guestOrderData.totalDiscount || 0,
+        shippingCost: guestOrderData.shippingCost,
+        tax: 0,
+        totalAmount: guestOrderData.totalAmount,
+        shippingAddress: guestOrderData.shippingAddress,
+        billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
+        paymentMethod: "card",
+        specialInstructions: guestOrderData.specialInstructions || "",
+        status: "confirmed",
+        paymentStatus: "paid",
+        paymentGatewayResponse: {
+          pg_txnid: callbackData.pg_txnid,
+          bank_txn: callbackData.bank_txn,
+          card_type: callbackData.card_type,
+          pay_time: callbackData.pay_time,
+          amount: callbackData.amount,
+          store_amount: callbackData.store_amount,
+          currency: callbackData.currency
+        }
+      });
+
+      await order.save();
+      console.log("Guest order created successfully:", order.orderNumber);
+
+      // Update product stock
+      if (guestOrderData.items && guestOrderData.items.length > 0) {
+        await updateProductStock(guestOrderData.items);
+        console.log("Product stock updated");
+      }
+      // Clean up pending data
+      global.pendingGuestOrders.delete(tran_id);
+      // Send email
+      try {
+        const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
+        if (toEmail) {
+          await sendOrderEmails(order, toEmail);
+          console.log("Guest confirmation email sent");
+        }
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError.message);
+      }
+      return res.status(200).json({
+        success: true,
+        message: "Guest order payment successful",
+        data: { orderId: order._id, orderNumber: order.orderNumber }
+      });
+    }
+
+    // Regular user order processing
+    console.log("Processing regular user order payment");
+
     const order = await Order.findOne({ transactionId: tran_id });
-    
+
+if (order) {
+  // ✅ YOU MUST EXPLICITLY UPDATE THESE FIELDS:
+  order.status = "confirmed";        // This was missing
+  order.paymentStatus = "paid";      // This was missing
+  await order.save();                // This must be called
+}
+
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
     }
 
-    // ✅ CRITICAL: UPDATE ORDER STATUS
+
+    
+    //  paymentStatus update
     order.status = "confirmed";
     order.paymentStatus = "paid";
+    // Store gateway response
     order.paymentGatewayResponse = {
       pg_txnid: callbackData.pg_txnid,
       bank_txn: callbackData.bank_txn,
@@ -960,29 +1080,43 @@ export const paymentSuccess = async (req, res) => {
       store_amount: callbackData.store_amount,
       currency: callbackData.currency
     };
-
     await order.save();
-    console.log("Order status updated successfully:", order.orderNumber);
-
-    // Additional processing (stock update, cart clearance, email)
-    await updateProductStock(order.items);
-    
-    if (order.userId) {
-      await Cart.findOneAndUpdate(
-        { userId: order.userId },
-        { $set: { items: [], totalAmount: 0, totalDiscountAmount: 0, finalAmount: 0 } }
-      );
+    console.log("Order payment confirmed:", order.orderNumber);
+    // Update product stock
+    if (order.items && order.items.length > 0) {
+      await updateProductStock(order.items);
+      console.log("Product stock updated");
     }
-
+    // Clear user's cart
+    if (order.userId) {
+      try {
+        await Cart.findOneAndUpdate(
+          { userId: order.userId },
+          {
+            $set: {
+              items: [],
+              totalBaseAmount: 0,
+              totalDiscountAmount: 0,
+              finalAmount: 0,
+              itemCount: 0,
+            },
+          }
+        );
+        console.log("Cart cleared for user");
+      } catch (cartError) {
+        console.error("Error clearing cart:", cartError.message);
+      }
+    }
     // Send confirmation email
     try {
-      const user = await User.findById(order.userId);
-      const toEmail = order.shippingAddress.email || user.email;
+      const user = order.userId ? await User.findById(order.userId) : null;
+      const toEmail = order?.shippingAddress?.email || user?.email;
       if (toEmail) {
         await sendOrderEmails(order, toEmail);
+        console.log("Order confirmation email sent");
       }
     } catch (emailError) {
-      console.error("Email error:", emailError);
+      console.error("Email sending failed:", emailError.message);
     }
 
     return res.status(200).json({
@@ -990,12 +1124,19 @@ export const paymentSuccess = async (req, res) => {
       message: "Payment successful",
       data: { orderId: order._id, orderNumber: order.orderNumber }
     });
-
   } catch (error) {
-    console.error("Payment success error:", error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("Payment success handler error:", error);
+    if (req.method === "GET") {
+      return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
+    }
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
+
 
 
 

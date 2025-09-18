@@ -1049,20 +1049,6 @@ export const paymentSuccess = async (req, res) => {
     console.log("Processing regular user order payment");
 
     const order = await Order.findOne({ transactionId: tran_id });
-    console.log("Found order:", order ? order._id : "NOT FOUND");
-
- if (order) {
-      console.log("Before update - Status:", order.status, "Payment Status:", order.paymentStatus);
-      
-      order.status = "confirmed";
-      order.paymentStatus = "paid";
-      
-      console.log("After update - Status:", order.status, "Payment Status:", order.paymentStatus);
-      
-      await order.save();
-      console.log("Order saved successfully");
-    }
-
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);
       return res.status(404).json({
@@ -1071,8 +1057,6 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-
-    
     //  paymentStatus update
     order.status = "confirmed";
     order.paymentStatus = "paid";
@@ -1488,18 +1472,20 @@ export const initializeAamarpayPayment = async (req, res) => {
       cus_add1: shippingAddress.address.substring(0, 50),
       cus_city: shippingAddress.city || "Dhaka",
       cus_country: shippingAddress.country || "Bangladesh",
-      // success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
-      // fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
-      // cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
+      success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
+      fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
+      cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
 
-      success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
-      fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
-      cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
+
+      // success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
+      // fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
+      // cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
 
       // Gateway callback  notify_url (server-side POST callback)
       notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: 'json'
     };
+
     console.log("Aamarpay request payload:", payload);
 
     // Send request to Aamarpay - using form-urlencoded format
@@ -1514,7 +1500,9 @@ export const initializeAamarpayPayment = async (req, res) => {
           timeout: 10000
         }
       );
+
       console.log("Aamarpay API response:", response.data);
+
       if (response.data && response.data.payment_url) {
         res.status(200).json({
           success: true,
@@ -1536,12 +1524,14 @@ export const initializeAamarpayPayment = async (req, res) => {
       }
     } catch (axiosError) {
       console.error("Axios error calling Aamarpay:", axiosError.response?.data || axiosError.message);
+
       res.status(500).json({
         success: false,
         message: "Failed to connect to payment gateway",
         error: axiosError.response?.data || axiosError.message
       });
     }
+
   } catch (error) {
     console.error("Payment initialization error:", error);
     res.status(500).json({

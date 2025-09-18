@@ -169,7 +169,7 @@ app.get("/", (req, res) => {
       orders: "/api/orders",
       campaigns: "/api/campaigns",
       checkout: "/api/checkout",
-      payments: "/api/payments",
+      payments: "/api/payment",
       reviews: "/api/reviews",
     },
   })

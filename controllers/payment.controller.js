@@ -631,301 +631,22 @@ export const initializePayment = async (req, res) => {
 // UPDATED: Handle payment success - Fixed version
 // CORRECTED: Handle payment success without separate verification API
 // UPDATED: Handle payment success - Fixed version
-// export const paymentSuccess = async (req, res) => {
-//   try {
-//     console.log("=== Payment Success Request ===");
-//     console.log("Method:", req.method);
-//     console.log("Params:", req.params);
-//     console.log("Query:", req.query);
-//     console.log("Body:", req.body);
-
-
-//     console.log("POST request received - This is Aamarpay server callback");
-//     console.log("Callback data:", req.body);
-
-
-//     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-
-//     if (!tran_id) {
-//       if (req.method === "GET") {
-//         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
-//       }
-//       return res.status(400).json({
-//         success: false,
-//         message: "Transaction ID missing",
-//       });
-//     }
-
-//     // যদি GET request হয় 👉 শুধু frontend-এ redirect করবে
-//     if (req.method === "GET") {
-//       console.log("GET request received for payment success, redirecting to frontend");
-
-//       // Check if it's a guest order
-//       if (tran_id.startsWith("GUEST_TXN_")) {
-//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
-//       } else {
-//         const order = await Order.findOne({ transactionId: tran_id });
-//         if (order) {
-//           return res.redirect(`${process.env.FRONTEND_URL}/order-success/${order._id}`);
-//         } else {
-//           return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=order_not_found`);
-//         }
-//       }
-//     }
-
-//     // যদি POST request হয় 👉 এটি Aamarpay থেকে server callback (IPN)
-//     console.log("POST request received - This is Aamarpay server callback");
-//     console.log("Callback data:", req.body);
-
-//     // Aamarpay callback data validation
-//     const callbackData = req.body;
-
-//     // Check if payment was successful
-//     const isPaymentSuccessful = callbackData.pay_status === "Successful";
-
-//     if (!isPaymentSuccessful) {
-//       console.log("Payment was not successful:", callbackData.pay_status);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Payment was not successful",
-//         paymentStatus: callbackData.pay_status
-//       });
-//     }
-
-//     // Verify store credentials match (security check)
-//     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-//       console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Store ID verification failed"
-//       });
-//     }
-
-//     console.log("Payment verification successful via callback");
-
-//     // গেস্ট অর্ডার কিনা চেক করো
-//     if (tran_id.startsWith("GUEST_TXN_")) {
-//       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-//       const guestOrderData = global.pendingGuestOrders.get(tran_id);
-
-//       if (!guestOrderData) {
-//         console.log("Guest order data not found for:", tran_id);
-//         return res.status(404).json({
-//           success: false,
-//           message: "Guest order data not found"
-//         });
-//       }
-
-//       // Create guest order
-//       const orderCount = await Order.countDocuments();
-//       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
-
-//       // Ensure all required fields are present
-//       const orderItems = guestOrderData.items.map(item => ({
-//         productId: item.productId,
-//         productTitle: item.productTitle || "Unknown Product",
-//         productImage: item.productImage || "/placeholder.svg",
-//         variantId: item.variantId || null,
-//         colorVariantId: item.colorVariantId || null,
-//         quantity: item.quantity || 1,
-//         originalPrice: item.originalPrice || 0,
-//         discountedPrice: item.discountedPrice || item.originalPrice || 0,
-//         discountPercentage: item.discountPercentage || 0,
-//         totalOriginalPrice: item.totalOriginalPrice || (item.originalPrice || 0) * (item.quantity || 1),
-//         totalDiscountedPrice: item.totalDiscountedPrice || (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-//         discountAmount: item.discountAmount || ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
-//       }));
-
-//       const subtotal = guestOrderData.subtotal || orderItems.reduce((sum, item) => sum + item.totalDiscountedPrice, 0);
-
-//       const order = new Order({
-//         isGuestOrder: true,
-//         guestCustomerInfo: {
-//           name: guestOrderData.shippingAddress.fullName,
-//           email: guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email || "",
-//           phone: guestOrderData.shippingAddress.phone || guestOrderData.customerInfo?.phone,
-//         },
-//         orderNumber,
-//         items: orderItems,
-//         subtotal: subtotal,
-//         totalDiscount: guestOrderData.totalDiscount || 0,
-//         shippingCost: guestOrderData.shippingCost,
-//         tax: 0,
-//         totalAmount: guestOrderData.totalAmount,
-//         shippingAddress: guestOrderData.shippingAddress,
-//         paymentMethod: "card",
-//         couponCode: guestOrderData.couponCode || null,
-//         couponDiscount: 0,
-//         specialInstructions: guestOrderData.specialInstructions || "",
-//         status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
-//         paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
-//         transactionId: tran_id,
-//         paymentGatewayResponse: {
-//           pg_txnid: callbackData.pg_txnid,
-//           bank_txn: callbackData.bank_txn,
-//           card_type: callbackData.card_type,
-//           pay_time: callbackData.pay_time,
-//           amount: callbackData.amount,
-//           store_amount: callbackData.store_amount,
-//           currency: callbackData.currency
-//         }
-//       });
-
-//       await order.save();
-
-//       // Update product stock
-//       try {
-//         await updateProductStock(orderItems);
-//         console.log("Product stock updated for guest order");
-//       } catch (stockError) {
-//         console.error("Error updating product stock:", stockError);
-//       }
-
-//       // Clean up
-//       global.pendingGuestOrders.delete(tran_id);
-//       console.log("Guest order created successfully:", order.orderNumber);
-
-//       // Send confirmation email
-//       try {
-//         const toEmail = guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email;
-//         if (toEmail) {
-//           await sendOrderEmails(order, toEmail);
-//           console.log("✅ Guest order confirmation email sent");
-//         }
-//       } catch (mailError) {
-//         console.error("❌ Failed to send guest confirmation email:", mailError);
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         message: "Guest order payment successful",
-//         data: {
-//           order: {
-//             _id: order._id,
-//             orderNumber: order.orderNumber,
-//             totalAmount: order.totalAmount,
-//             status: order.status,
-//             paymentStatus: order.paymentStatus,
-//           },
-//         },
-//       });
-//     } else {
-//       // Regular order processing
-//       const order = await Order.findOne({ transactionId: tran_id });
-//       if (!order) {
-//         console.log("Order not found for transaction ID:", tran_id);
-//         return res.status(404).json({
-//           success: false,
-//           message: "Order not found"
-//         });
-//       }
-
-//       // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
-//       order.paymentStatus = "paid";
-//       order.status = "confirmed";
-
-//       // Store payment gateway response
-//       order.paymentGatewayResponse = {
-//         pg_txnid: callbackData.pg_txnid,
-//         bank_txn: callbackData.bank_txn,
-//         card_type: callbackData.card_type,
-//         pay_time: callbackData.pay_time,
-//         amount: callbackData.amount,
-//         store_amount: callbackData.store_amount,
-//         currency: callbackData.currency
-//       };
-
-//       await order.save();
-
-//       // Update product stock
-//       try {
-//         await updateProductStock(order.items);
-//         console.log("Product stock updated for regular order");
-//       } catch (stockError) {
-//         console.error("Error updating product stock:", stockError);
-//       }
-
-//       // Clear user's cart
-//       try {
-//         await Cart.findOneAndUpdate(
-//           { userId: order.userId },
-//           {
-//             $set: {
-//               items: [],
-//               totalBaseAmount: 0,
-//               totalDiscountAmount: 0,
-//               finalAmount: 0,
-//               itemCount: 0,
-//             },
-//           }
-//         );
-//         console.log("Cart cleared for user:", order.userId);
-//       } catch (cartError) {
-//         console.error("Error clearing cart:", cartError);
-//       }
-
-//       console.log("Order payment confirmed successfully:", order.orderNumber);
-
-//       // Send confirmation email
-//       try {
-//         const user = await User.findById(order.userId);
-//         const toEmail = order?.shippingAddress?.email || user?.email;
-//         if (toEmail) {
-//           await sendOrderEmails(order, toEmail);
-//           console.log("✅ Order confirmation email sent");
-//         }
-//       } catch (mailError) {
-//         console.error("❌ Failed to send confirmation email:", mailError);
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         message: "Payment successful",
-//         data: {
-//           order: {
-//             _id: order._id,
-//             orderNumber: order.orderNumber,
-//             totalAmount: order.totalAmount,
-//             status: order.status,
-//             paymentStatus: order.paymentStatus,
-//           },
-//         },
-//       });
-//     }
-
-//   } catch (error) {
-//     console.error("Payment success handler error:", error);
-
-//     if (req.method === "GET") {
-//       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
-//     }
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
-
-
-// payment.controller.js এ paymentSuccess function টি এই সরলীকৃত version দিয়ে replace করুন:
-
-// UPDATED: Handle payment success - Fixed version
 export const paymentSuccess = async (req, res) => {
   try {
-    console.log("=== Payment Success Handler ===");
+    console.log("=== Payment Success Request ===");
     console.log("Method:", req.method);
     console.log("Params:", req.params);
-    console.log("Body:", req.body);
     console.log("Query:", req.query);
+    console.log("Body:", req.body);
+
+
+    console.log("POST request received - This is Aamarpay server callback");
+    console.log("Callback data:", req.body);
+
 
     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
 
     if (!tran_id) {
-      console.log("Transaction ID missing");
       if (req.method === "GET") {
         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
       }
@@ -935,23 +656,35 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // Handle GET request (user redirect)
+    // যদি GET request হয় 👉 শুধু frontend-এ redirect করবে
     if (req.method === "GET") {
-      console.log("GET request - redirecting user to frontend");
-      
+      console.log("GET request received for payment success, redirecting to frontend");
+
+      // Check if it's a guest order
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
-        return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}`);
+        const order = await Order.findOne({ transactionId: tran_id });
+        if (order) {
+          return res.redirect(`${process.env.FRONTEND_URL}/order-success/${order._id}`);
+        } else {
+          return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=order_not_found`);
+        }
       }
     }
 
-    console.log("POST request - Processing payment callback from Aamarpay");
+    // যদি POST request হয় 👉 এটি Aamarpay থেকে server callback (IPN)
+    console.log("POST request received - This is Aamarpay server callback");
+    console.log("Callback data:", req.body);
+
+    // Aamarpay callback data validation
     const callbackData = req.body;
 
-    // Verify payment was successful
-    if (callbackData.pay_status !== "Successful") {
-      console.log("Payment not successful:", callbackData.pay_status);
+    // Check if payment was successful
+    const isPaymentSuccessful = callbackData.pay_status === "Successful";
+
+    if (!isPaymentSuccessful) {
+      console.log("Payment was not successful:", callbackData.pay_status);
       return res.status(400).json({
         success: false,
         message: "Payment was not successful",
@@ -959,55 +692,74 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // Verify store ID
+    // Verify store credentials match (security check)
     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-      console.log("Store ID mismatch");
+      console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
       return res.status(400).json({
         success: false,
         message: "Store ID verification failed"
       });
     }
 
-    console.log("Payment verification successful");
+    console.log("Payment verification successful via callback");
 
-    // Handle guest orders
+    // গেস্ট অর্ডার কিনা চেক করো
     if (tran_id.startsWith("GUEST_TXN_")) {
-      console.log("Processing guest order payment");
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
       const guestOrderData = global.pendingGuestOrders.get(tran_id);
-      
+
       if (!guestOrderData) {
-        console.log("Guest order data not found");
+        console.log("Guest order data not found for:", tran_id);
         return res.status(404).json({
           success: false,
           message: "Guest order data not found"
         });
       }
-      
+
+      // Create guest order
       const orderCount = await Order.countDocuments();
       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
+
+      // Ensure all required fields are present
+      const orderItems = guestOrderData.items.map(item => ({
+        productId: item.productId,
+        productTitle: item.productTitle || "Unknown Product",
+        productImage: item.productImage || "/placeholder.svg",
+        variantId: item.variantId || null,
+        colorVariantId: item.colorVariantId || null,
+        quantity: item.quantity || 1,
+        originalPrice: item.originalPrice || 0,
+        discountedPrice: item.discountedPrice || item.originalPrice || 0,
+        discountPercentage: item.discountPercentage || 0,
+        totalOriginalPrice: item.totalOriginalPrice || (item.originalPrice || 0) * (item.quantity || 1),
+        totalDiscountedPrice: item.totalDiscountedPrice || (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+        discountAmount: item.discountAmount || ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
+      }));
+
+      const subtotal = guestOrderData.subtotal || orderItems.reduce((sum, item) => sum + item.totalDiscountedPrice, 0);
 
       const order = new Order({
         isGuestOrder: true,
         guestCustomerInfo: {
-          name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
-          email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
-          phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
+          name: guestOrderData.shippingAddress.fullName,
+          email: guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email || "",
+          phone: guestOrderData.shippingAddress.phone || guestOrderData.customerInfo?.phone,
         },
         orderNumber,
-        transactionId: tran_id,
-        items: guestOrderData.items,
-        subtotal: guestOrderData.subtotal,
+        items: orderItems,
+        subtotal: subtotal,
         totalDiscount: guestOrderData.totalDiscount || 0,
         shippingCost: guestOrderData.shippingCost,
         tax: 0,
         totalAmount: guestOrderData.totalAmount,
         shippingAddress: guestOrderData.shippingAddress,
-        billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
         paymentMethod: "card",
+        couponCode: guestOrderData.couponCode || null,
+        couponDiscount: 0,
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed", // ✅ Set status to confirmed
-        paymentStatus: "paid", // ✅ Set payment status to paid
+        status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
+        paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
+        transactionId: tran_id,
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid,
           bank_txn: callbackData.bank_txn,
@@ -1020,73 +772,80 @@ export const paymentSuccess = async (req, res) => {
       });
 
       await order.save();
-      console.log("Guest order created successfully:", order.orderNumber);
 
       // Update product stock
-      if (guestOrderData.items && guestOrderData.items.length > 0) {
-        await updateProductStock(guestOrderData.items);
-        console.log("Product stock updated");
-      }
-      
-      // Clean up pending data
-      global.pendingGuestOrders.delete(tran_id);
-      
-      // Send email
       try {
-        const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
+        await updateProductStock(orderItems);
+        console.log("Product stock updated for guest order");
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
+      }
+
+      // Clean up
+      global.pendingGuestOrders.delete(tran_id);
+      console.log("Guest order created successfully:", order.orderNumber);
+
+      // Send confirmation email
+      try {
+        const toEmail = guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email;
         if (toEmail) {
           await sendOrderEmails(order, toEmail);
-          console.log("Guest confirmation email sent");
+          console.log("✅ Guest order confirmation email sent");
         }
-      } catch (emailError) {
-        console.error("Email sending failed:", emailError.message);
+      } catch (mailError) {
+        console.error("❌ Failed to send guest confirmation email:", mailError);
       }
-      
+
       return res.status(200).json({
         success: true,
         message: "Guest order payment successful",
-        data: { orderId: order._id, orderNumber: order.orderNumber }
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
+        },
       });
-    }
+    } else {
+      // Regular order processing
+      const order = await Order.findOne({ transactionId: tran_id });
+      if (!order) {
+        console.log("Order not found for transaction ID:", tran_id);
+        return res.status(404).json({
+          success: false,
+          message: "Order not found"
+        });
+      }
 
-    // Handle regular user orders
-    console.log("Processing regular user order payment");
-    const order = await Order.findOne({ transactionId: tran_id });
-    
-    if (!order) {
-      console.log("Order not found for transaction ID:", tran_id);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found"
-      });
-    }
+      // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
+      order.paymentStatus = "paid";
+      order.status = "confirmed";
 
-    // ✅ Update paymentStatus and status for regular orders
-    order.status = "confirmed";
-    order.paymentStatus = "paid";
-    
-    // Store gateway response
-    order.paymentGatewayResponse = {
-      pg_txnid: callbackData.pg_txnid,
-      bank_txn: callbackData.bank_txn,
-      card_type: callbackData.card_type,
-      pay_time: callbackData.pay_time,
-      amount: callbackData.amount,
-      store_amount: callbackData.store_amount,
-      currency: callbackData.currency
-    };
-    
-    await order.save();
-    console.log("Order payment confirmed:", order.orderNumber);
-    
-    // Update product stock
-    if (order.items && order.items.length > 0) {
-      await updateProductStock(order.items);
-      console.log("Product stock updated");
-    }
-    
-    // Clear user's cart
-    if (order.userId) {
+      // Store payment gateway response
+      order.paymentGatewayResponse = {
+        pg_txnid: callbackData.pg_txnid,
+        bank_txn: callbackData.bank_txn,
+        card_type: callbackData.card_type,
+        pay_time: callbackData.pay_time,
+        amount: callbackData.amount,
+        store_amount: callbackData.store_amount,
+        currency: callbackData.currency
+      };
+
+      await order.save();
+
+      // Update product stock
+      try {
+        await updateProductStock(order.items);
+        console.log("Product stock updated for regular order");
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
+      }
+
+      // Clear user's cart
       try {
         await Cart.findOneAndUpdate(
           { userId: order.userId },
@@ -1100,34 +859,47 @@ export const paymentSuccess = async (req, res) => {
             },
           }
         );
-        console.log("Cart cleared for user");
+        console.log("Cart cleared for user:", order.userId);
       } catch (cartError) {
-        console.error("Error clearing cart:", cartError.message);
+        console.error("Error clearing cart:", cartError);
       }
-    }
-    
-    // Send confirmation email
-    try {
-      const user = order.userId ? await User.findById(order.userId) : null;
-      const toEmail = order?.shippingAddress?.email || user?.email;
-      if (toEmail) {
-        await sendOrderEmails(order, toEmail);
-        console.log("Order confirmation email sent");
+
+      console.log("Order payment confirmed successfully:", order.orderNumber);
+
+      // Send confirmation email
+      try {
+        const user = await User.findById(order.userId);
+        const toEmail = order?.shippingAddress?.email || user?.email;
+        if (toEmail) {
+          await sendOrderEmails(order, toEmail);
+          console.log("✅ Order confirmation email sent");
+        }
+      } catch (mailError) {
+        console.error("❌ Failed to send confirmation email:", mailError);
       }
-    } catch (emailError) {
-      console.error("Email sending failed:", emailError.message);
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment successful",
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
+        },
+      });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Payment successful",
-      data: { orderId: order._id, orderNumber: order.orderNumber }
-    });
   } catch (error) {
     console.error("Payment success handler error:", error);
+
     if (req.method === "GET") {
       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
     }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1135,6 +907,234 @@ export const paymentSuccess = async (req, res) => {
     });
   }
 };
+
+
+
+
+// payment.controller.js এ paymentSuccess function টি এই সরলীকৃত version দিয়ে replace করুন:
+
+// UPDATED: Handle payment success - Fixed version
+// export const paymentSuccess = async (req, res) => {
+//   try {
+//     console.log("=== Payment Success Handler ===");
+//     console.log("Method:", req.method);
+//     console.log("Params:", req.params);
+//     console.log("Body:", req.body);
+//     console.log("Query:", req.query);
+
+//     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
+
+//     if (!tran_id) {
+//       console.log("Transaction ID missing");
+//       if (req.method === "GET") {
+//         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
+//       }
+//       return res.status(400).json({
+//         success: false,
+//         message: "Transaction ID missing",
+//       });
+//     }
+
+//     // Handle GET request (user redirect)
+//     if (req.method === "GET") {
+//       console.log("GET request - redirecting user to frontend");
+      
+//       if (tran_id.startsWith("GUEST_TXN_")) {
+//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
+//       } else {
+//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}`);
+//       }
+//     }
+
+//     console.log("POST request - Processing payment callback from Aamarpay");
+//     const callbackData = req.body;
+
+//     // Verify payment was successful
+//     if (callbackData.pay_status !== "Successful") {
+//       console.log("Payment not successful:", callbackData.pay_status);
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment was not successful",
+//         paymentStatus: callbackData.pay_status
+//       });
+//     }
+
+//     // Verify store ID
+//     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
+//       console.log("Store ID mismatch");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Store ID verification failed"
+//       });
+//     }
+
+//     console.log("Payment verification successful");
+
+//     // Handle guest orders
+//     if (tran_id.startsWith("GUEST_TXN_")) {
+//       console.log("Processing guest order payment");
+//       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
+//       const guestOrderData = global.pendingGuestOrders.get(tran_id);
+      
+//       if (!guestOrderData) {
+//         console.log("Guest order data not found");
+//         return res.status(404).json({
+//           success: false,
+//           message: "Guest order data not found"
+//         });
+//       }
+      
+//       const orderCount = await Order.countDocuments();
+//       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
+
+//       const order = new Order({
+//         isGuestOrder: true,
+//         guestCustomerInfo: {
+//           name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
+//           email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
+//           phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
+//         },
+//         orderNumber,
+//         transactionId: tran_id,
+//         items: guestOrderData.items,
+//         subtotal: guestOrderData.subtotal,
+//         totalDiscount: guestOrderData.totalDiscount || 0,
+//         shippingCost: guestOrderData.shippingCost,
+//         tax: 0,
+//         totalAmount: guestOrderData.totalAmount,
+//         shippingAddress: guestOrderData.shippingAddress,
+//         billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
+//         paymentMethod: "card",
+//         specialInstructions: guestOrderData.specialInstructions || "",
+//         status: "confirmed", // ✅ Set status to confirmed
+//         paymentStatus: "paid", // ✅ Set payment status to paid
+//         paymentGatewayResponse: {
+//           pg_txnid: callbackData.pg_txnid,
+//           bank_txn: callbackData.bank_txn,
+//           card_type: callbackData.card_type,
+//           pay_time: callbackData.pay_time,
+//           amount: callbackData.amount,
+//           store_amount: callbackData.store_amount,
+//           currency: callbackData.currency
+//         }
+//       });
+
+//       await order.save();
+//       console.log("Guest order created successfully:", order.orderNumber);
+
+//       // Update product stock
+//       if (guestOrderData.items && guestOrderData.items.length > 0) {
+//         await updateProductStock(guestOrderData.items);
+//         console.log("Product stock updated");
+//       }
+      
+//       // Clean up pending data
+//       global.pendingGuestOrders.delete(tran_id);
+      
+//       // Send email
+//       try {
+//         const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
+//         if (toEmail) {
+//           await sendOrderEmails(order, toEmail);
+//           console.log("Guest confirmation email sent");
+//         }
+//       } catch (emailError) {
+//         console.error("Email sending failed:", emailError.message);
+//       }
+      
+//       return res.status(200).json({
+//         success: true,
+//         message: "Guest order payment successful",
+//         data: { orderId: order._id, orderNumber: order.orderNumber }
+//       });
+//     }
+
+//     // Handle regular user orders
+//     console.log("Processing regular user order payment");
+//     const order = await Order.findOne({ transactionId: tran_id });
+    
+//     if (!order) {
+//       console.log("Order not found for transaction ID:", tran_id);
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found"
+//       });
+//     }
+
+//     // ✅ Update paymentStatus and status for regular orders
+//     order.status = "confirmed";
+//     order.paymentStatus = "paid";
+    
+//     // Store gateway response
+//     order.paymentGatewayResponse = {
+//       pg_txnid: callbackData.pg_txnid,
+//       bank_txn: callbackData.bank_txn,
+//       card_type: callbackData.card_type,
+//       pay_time: callbackData.pay_time,
+//       amount: callbackData.amount,
+//       store_amount: callbackData.store_amount,
+//       currency: callbackData.currency
+//     };
+    
+//     await order.save();
+//     console.log("Order payment confirmed:", order.orderNumber);
+    
+//     // Update product stock
+//     if (order.items && order.items.length > 0) {
+//       await updateProductStock(order.items);
+//       console.log("Product stock updated");
+//     }
+    
+//     // Clear user's cart
+//     if (order.userId) {
+//       try {
+//         await Cart.findOneAndUpdate(
+//           { userId: order.userId },
+//           {
+//             $set: {
+//               items: [],
+//               totalBaseAmount: 0,
+//               totalDiscountAmount: 0,
+//               finalAmount: 0,
+//               itemCount: 0,
+//             },
+//           }
+//         );
+//         console.log("Cart cleared for user");
+//       } catch (cartError) {
+//         console.error("Error clearing cart:", cartError.message);
+//       }
+//     }
+    
+//     // Send confirmation email
+//     try {
+//       const user = order.userId ? await User.findById(order.userId) : null;
+//       const toEmail = order?.shippingAddress?.email || user?.email;
+//       if (toEmail) {
+//         await sendOrderEmails(order, toEmail);
+//         console.log("Order confirmation email sent");
+//       }
+//     } catch (emailError) {
+//       console.error("Email sending failed:", emailError.message);
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Payment successful",
+//       data: { orderId: order._id, orderNumber: order.orderNumber }
+//     });
+//   } catch (error) {
+//     console.error("Payment success handler error:", error);
+//     if (req.method === "GET") {
+//       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
+//     }
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 
 

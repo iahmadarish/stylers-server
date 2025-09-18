@@ -31,13 +31,10 @@ router.post("/initialize", initializeAamarpayPayment);
 router.post("/initialize-guest-payment", initializeGuestPayment);
 // router.post("/verify", verifyAamarpayPayment);
 
-/**
- * Aamarpay redirect and server-to-server callback routes
- * GET এবং POST উভয়ই handle করবে
- */
+
 router.route("/success/:transactionId")
-  .get(paymentSuccess)  // GET request handle করবে
-  .post(paymentSuccess); // POST request handle করবে
+  .get(paymentSuccess)  // GET request handle
+  .post(paymentSuccess); // POST request handle 
 
 router.route("/fail/:transactionId")
   .get(paymentFail)
@@ -47,10 +44,7 @@ router.route("/cancel/:transactionId")
   .get(paymentCancel)
   .post(paymentCancel);
 
-/**
- * AamarPay IPN route (always POST)
- */
-// router.post("/notify", handleIPN);
+
 
 
 router.post('/notify', paymentNotify); // Aamarpay server callback

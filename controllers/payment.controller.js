@@ -82,9 +82,9 @@ export const initializeGuestPayment = async (req, res) => {
     console.log("Customer Info:", JSON.stringify(customerInfo, null, 2));
 
     // Calculate amounts
-    const subtotal = guestOrderData.subtotal || guestOrderData.items.reduce((sum, item) => 
+    const subtotal = guestOrderData.subtotal || guestOrderData.items.reduce((sum, item) =>
       sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1), 0);
-    
+
     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city);
     const finalTotal = subtotal + shippingCost;
     const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -172,7 +172,7 @@ export const initializeGuestPayment = async (req, res) => {
     } else {
       // Clean up if failed
       global.pendingGuestOrders.delete(tran_id);
-      
+
       res.status(400).json({
         success: false,
         message: response.data.msg || "Payment initialization failed",
@@ -659,7 +659,7 @@ export const initializePayment = async (req, res) => {
 //     // যদি GET request হয় 👉 শুধু frontend-এ redirect করবে
 //     if (req.method === "GET") {
 //       console.log("GET request received for payment success, redirecting to frontend");
-      
+
 //       // Check if it's a guest order
 //       if (tran_id.startsWith("GUEST_TXN_")) {
 //         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
@@ -916,28 +916,15 @@ export const initializePayment = async (req, res) => {
 export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Handler ===");
-    console.log("Method:", req.method);
-    console.log("Params:", req.params);
-    console.log("Body:", req.body);
-    console.log("Query:", req.query);
-
+    
     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-
+    
     if (!tran_id) {
-      console.log("Transaction ID missing");
-      if (req.method === "GET") {
-        return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
-      }
-      return res.status(400).json({
-        success: false,
-        message: "Transaction ID missing",
-      });
+      return res.status(400).json({ success: false, message: "Transaction ID missing" });
     }
 
-    // GET request হলে শুধু frontend এ redirect করবে (user browser redirect)
+    // Handle GET requests (frontend redirect)
     if (req.method === "GET") {
-      console.log("GET request - redirecting user to frontend");
-      
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
@@ -945,133 +932,25 @@ export const paymentSuccess = async (req, res) => {
       }
     }
 
-    // POST request - এটি Aamarpay থেকে server callback
-    console.log("POST request - Processing payment callback from Aamarpay");
-    
+    // Handle POST requests (Aamarpay callback)
     const callbackData = req.body;
     
-    // Payment status check
+    // Verify payment was successful
     if (callbackData.pay_status !== "Successful") {
-      console.log("Payment not successful:", callbackData.pay_status);
-      return res.status(400).json({
-        success: false,
-        message: "Payment was not successful",
-        paymentStatus: callbackData.pay_status
-      });
+      return res.status(400).json({ success: false, message: "Payment not successful" });
     }
 
-    // Store ID verification
-    if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-      console.log("Store ID mismatch");
-      return res.status(400).json({
-        success: false,
-        message: "Store ID verification failed"
-      });
-    }
-
-    console.log("Payment verification successful");
-
-    // Guest order processing
-    if (tran_id.startsWith("GUEST_TXN_")) {
-      console.log("Processing guest order payment");
-      
-      global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-      const guestOrderData = global.pendingGuestOrders.get(tran_id);
-
-      if (!guestOrderData) {
-        console.log("Guest order data not found");
-        return res.status(404).json({
-          success: false,
-          message: "Guest order data not found"
-        });
-      }
-
-      // Create guest order - simplified
-      const orderCount = await Order.countDocuments();
-      const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
-
-      const order = new Order({
-        isGuestOrder: true,
-        guestCustomerInfo: {
-          name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
-          email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
-          phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
-        },
-        orderNumber,
-        transactionId: tran_id,
-        items: guestOrderData.items,
-        subtotal: guestOrderData.subtotal,
-        totalDiscount: guestOrderData.totalDiscount || 0,
-        shippingCost: guestOrderData.shippingCost,
-        tax: 0,
-        totalAmount: guestOrderData.totalAmount,
-        shippingAddress: guestOrderData.shippingAddress,
-        billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-        paymentMethod: "card",
-        specialInstructions: guestOrderData.specialInstructions || "",
-        
-        // ✅ এই দুটি field সবচেয়ে গুরুত্বপূর্ণ
-        status: "confirmed",
-        paymentStatus: "paid",
-        
-        paymentGatewayResponse: {
-          pg_txnid: callbackData.pg_txnid,
-          bank_txn: callbackData.bank_txn,
-          card_type: callbackData.card_type,
-          pay_time: callbackData.pay_time,
-          amount: callbackData.amount,
-          store_amount: callbackData.store_amount,
-          currency: callbackData.currency
-        }
-      });
-
-      await order.save();
-      console.log("✅ Guest order created successfully:", order.orderNumber);
-
-      // Update product stock
-      if (guestOrderData.items && guestOrderData.items.length > 0) {
-        await updateProductStock(guestOrderData.items);
-        console.log("✅ Product stock updated");
-      }
-
-      // Clean up pending data
-      global.pendingGuestOrders.delete(tran_id);
-
-      // Send email
-      try {
-        const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
-        if (toEmail) {
-          await sendOrderEmails(order, toEmail);
-          console.log("✅ Guest confirmation email sent");
-        }
-      } catch (emailError) {
-        console.error("❌ Email sending failed:", emailError.message);
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Guest order payment successful",
-        data: { orderId: order._id, orderNumber: order.orderNumber }
-      });
-    }
-
-    // Regular user order processing
-    console.log("Processing regular user order payment");
-    
+    // Find the order by transaction ID
     const order = await Order.findOne({ transactionId: tran_id });
+    
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found"
-      });
+      return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    // ✅ এখানেই মূল সমস্যা ছিল - status এবং paymentStatus update
+    // ✅ CRITICAL: UPDATE ORDER STATUS
     order.status = "confirmed";
     order.paymentStatus = "paid";
-    
-    // Store gateway response
     order.paymentGatewayResponse = {
       pg_txnid: callbackData.pg_txnid,
       bank_txn: callbackData.bank_txn,
@@ -1083,45 +962,27 @@ export const paymentSuccess = async (req, res) => {
     };
 
     await order.save();
-    console.log("✅ Order payment confirmed:", order.orderNumber);
+    console.log("Order status updated successfully:", order.orderNumber);
 
-    // Update product stock
-    if (order.items && order.items.length > 0) {
-      await updateProductStock(order.items);
-      console.log("✅ Product stock updated");
-    }
-
-    // Clear user's cart
+    // Additional processing (stock update, cart clearance, email)
+    await updateProductStock(order.items);
+    
     if (order.userId) {
-      try {
-        await Cart.findOneAndUpdate(
-          { userId: order.userId },
-          {
-            $set: {
-              items: [],
-              totalBaseAmount: 0,
-              totalDiscountAmount: 0,
-              finalAmount: 0,
-              itemCount: 0,
-            },
-          }
-        );
-        console.log("✅ Cart cleared for user");
-      } catch (cartError) {
-        console.error("❌ Error clearing cart:", cartError.message);
-      }
+      await Cart.findOneAndUpdate(
+        { userId: order.userId },
+        { $set: { items: [], totalAmount: 0, totalDiscountAmount: 0, finalAmount: 0 } }
+      );
     }
 
     // Send confirmation email
     try {
-      const user = order.userId ? await User.findById(order.userId) : null;
-      const toEmail = order?.shippingAddress?.email || user?.email;
+      const user = await User.findById(order.userId);
+      const toEmail = order.shippingAddress.email || user.email;
       if (toEmail) {
         await sendOrderEmails(order, toEmail);
-        console.log("✅ Order confirmation email sent");
       }
     } catch (emailError) {
-      console.error("❌ Email sending failed:", emailError.message);
+      console.error("Email error:", emailError);
     }
 
     return res.status(200).json({
@@ -1131,20 +992,10 @@ export const paymentSuccess = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Payment success handler error:", error);
-
-    if (req.method === "GET") {
-      return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
+    console.error("Payment success error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 
 
 
@@ -1159,10 +1010,8 @@ export const paymentNotify = async (req, res) => {
   try {
     console.log("=== Payment Notify (IPN) Request ===");
     console.log("Request body:", JSON.stringify(req.body, null, 2));
-
     // This is the same logic as paymentSuccess POST handler
     await paymentSuccess(req, res);
-
   } catch (error) {
     console.error("Payment notify error:", error);
     res.status(500).json({
@@ -1311,10 +1160,8 @@ export const initializeAamarpayPayment = async (req, res) => {
     console.log("Request body:", JSON.stringify(req.body, null, 2));
 
     const { userId, shippingAddress, couponCode = null, specialInstructions = "", isGuest = false, guestOrderData = null } = req.body;
-
     let amountDetails, orderItems, finalAmount;
 
-    // Validate required fields for regular orders
     if (!isGuest && !userId) {
       return res.status(400).json({
         success: false,
@@ -1322,12 +1169,14 @@ export const initializeAamarpayPayment = async (req, res) => {
       });
     }
 
+
     if (!shippingAddress || !shippingAddress.fullName || !shippingAddress.phone || !shippingAddress.address) {
       return res.status(400).json({
         success: false,
         message: "Complete shipping address is required"
       });
     }
+
 
     if (isGuest) {
       // Process guest order
@@ -1337,7 +1186,6 @@ export const initializeAamarpayPayment = async (req, res) => {
           message: "Guest order data with items is required"
         });
       }
-
       amountDetails = calculateGuestOrderAmount(guestOrderData);
       finalAmount = amountDetails.finalTotal;
       orderItems = guestOrderData.items;
@@ -1377,47 +1225,45 @@ export const initializeAamarpayPayment = async (req, res) => {
     formData.append('cus_city', shippingAddress.city || "Dhaka");
     formData.append('cus_country', shippingAddress.country || "Bangladesh");
 
-//    formData.append(
-//   'success_url',
-//   `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
-// );  // User browser redirect
-//  formData.append(
-//   'fail_url',
-//   `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
-// );
-// formData.append(
-//   'cancel_url',
-//   `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
-// );
+    //    formData.append(
+    //   'success_url',
+    //   `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
+    // );  // User browser redirect
+    //  formData.append(
+    //   'fail_url',
+    //   `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
+    // );
+    // formData.append(
+    //   'cancel_url',
+    //   `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
+    // );
 
-formData.append(
--  'success_url',
--  `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
-+  'success_url',
-+  `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`
-);  // Aamarpay POST করবে backend-এ
+    formData.append(
+      -  'success_url',
+      -  `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
+      + 'success_url',
+      +  `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`
+    );  // Aamarpay POST 
 
-formData.append(
--  'fail_url',
--  `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
-+  'fail_url',
-+  `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`
-);
+    formData.append(
+      -  'fail_url',
+      -  `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
+      + 'fail_url',
+      +  `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`
+    );
 
-formData.append(
--  'cancel_url',
--  `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
-+  'cancel_url',
-+  `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`
-);
+    formData.append(
+      -  'cancel_url',
+      -  `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
+      + 'cancel_url',
+      +  `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`
+    );
 
 
     // Server-side verification (callback)
     formData.append('notify_url', `${process.env.BACKEND_URL}/api/payment/notify`);
     formData.append('type', 'json');
-
     console.log("Aamarpay form data:", Object.fromEntries(formData));
-
     // For guest orders, store in pending orders
     if (isGuest) {
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
@@ -1499,24 +1345,14 @@ formData.append(
       // fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
       // cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
 
-
-  success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
-  fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
-  cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
-
-
-// success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
-// fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
-// cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
-
-
-
+      success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
+      fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
+      cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
 
       // Gateway callback  notify_url (server-side POST callback)
       notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: 'json'
     };
-
     console.log("Aamarpay request payload:", payload);
 
     // Send request to Aamarpay - using form-urlencoded format
@@ -1531,9 +1367,7 @@ formData.append(
           timeout: 10000
         }
       );
-
       console.log("Aamarpay API response:", response.data);
-
       if (response.data && response.data.payment_url) {
         res.status(200).json({
           success: true,
@@ -1555,14 +1389,12 @@ formData.append(
       }
     } catch (axiosError) {
       console.error("Axios error calling Aamarpay:", axiosError.response?.data || axiosError.message);
-
       res.status(500).json({
         success: false,
         message: "Failed to connect to payment gateway",
         error: axiosError.response?.data || axiosError.message
       });
     }
-
   } catch (error) {
     console.error("Payment initialization error:", error);
     res.status(500).json({

@@ -635,10 +635,16 @@ export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Request ===");
     console.log("Method:", req.method);
+    console.log("Params:", req.params);
     console.log("Query:", req.query);
     console.log("Body:", req.body);
 
-    const tran_id = req.body?.tran_id || req.query?.tran_id;
+
+    console.log("POST request received - This is Aamarpay server callback");
+    console.log("Callback data:", req.body);
+
+
+    const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
 
     if (!tran_id) {
       if (req.method === "GET") {
@@ -654,6 +660,7 @@ export const paymentSuccess = async (req, res) => {
     if (req.method === "GET") {
       console.log("GET request received for payment success, redirecting to frontend");
       
+      // Check if it's a guest order
       if (tran_id.startsWith("GUEST_TXN_")) {
         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
       } else {
@@ -670,31 +677,34 @@ export const paymentSuccess = async (req, res) => {
     console.log("POST request received - This is Aamarpay server callback");
     console.log("Callback data:", req.body);
 
+    // Aamarpay callback data validation
     const callbackData = req.body;
 
+    // Check if payment was successful
     const isPaymentSuccessful = callbackData.pay_status === "Successful";
+
     if (!isPaymentSuccessful) {
       console.log("Payment was not successful:", callbackData.pay_status);
-      return res.status(400).json({ 
-        success: false, 
-        message: "Payment was not successful", 
-        paymentStatus: callbackData.pay_status 
+      return res.status(400).json({
+        success: false,
+        message: "Payment was not successful",
+        paymentStatus: callbackData.pay_status
       });
     }
 
+    // Verify store credentials match (security check)
     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
       console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
-      return res.status(400).json({ success: false, message: "Store ID verification failed" });
+      return res.status(400).json({
+        success: false,
+        message: "Store ID verification failed"
+      });
     }
 
-    console.log("Payment verification successful...");
+    console.log("Payment verification successful via callback");
 
-    // ✅ এখানে সংশোধন করা হয়েছে
-    // রেগুলার বা গেস্ট অর্ডার যাই হোক, ট্রানজেকশন আইডি দিয়ে অর্ডার খুঁজে বের করা হচ্ছে
-    let order = await Order.findOne({ transactionId: tran_id });
-
-    if (tran_id.startsWith("GUEST_TXN_") && !order) {
-      // যদি গেস্ট অর্ডার হয় এবং এটি এখনও ডেটাবেজে সেভ না হয়ে থাকে
+    // গেস্ট অর্ডার কিনা চেক করো
+    if (tran_id.startsWith("GUEST_TXN_")) {
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
       const guestOrderData = global.pendingGuestOrders.get(tran_id);
 
@@ -706,21 +716,29 @@ export const paymentSuccess = async (req, res) => {
         });
       }
 
-      // গেস্ট অর্ডারের ডেটা ব্যবহার করে নতুন অর্ডার তৈরি করা হচ্ছে
+      // Create guest order
       const orderCount = await Order.countDocuments();
       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
 
+      // Ensure all required fields are present
       const orderItems = guestOrderData.items.map(item => ({
-        ...item,
+        productId: item.productId,
         productTitle: item.productTitle || "Unknown Product",
         productImage: item.productImage || "/placeholder.svg",
         variantId: item.variantId || null,
         colorVariantId: item.colorVariantId || null,
+        quantity: item.quantity || 1,
+        originalPrice: item.originalPrice || 0,
+        discountedPrice: item.discountedPrice || item.originalPrice || 0,
+        discountPercentage: item.discountPercentage || 0,
+        totalOriginalPrice: item.totalOriginalPrice || (item.originalPrice || 0) * (item.quantity || 1),
+        totalDiscountedPrice: item.totalDiscountedPrice || (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+        discountAmount: item.discountAmount || ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
       }));
 
       const subtotal = guestOrderData.subtotal || orderItems.reduce((sum, item) => sum + item.totalDiscountedPrice, 0);
 
-      order = new Order({
+      const order = new Order({
         isGuestOrder: true,
         guestCustomerInfo: {
           name: guestOrderData.shippingAddress.fullName,
@@ -739,8 +757,8 @@ export const paymentSuccess = async (req, res) => {
         couponCode: guestOrderData.couponCode || null,
         couponDiscount: 0,
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed",
-        paymentStatus: "paid",
+        status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
+        paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
         transactionId: tran_id,
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid,
@@ -752,20 +770,61 @@ export const paymentSuccess = async (req, res) => {
           currency: callbackData.currency
         }
       });
+
       await order.save();
+
+      // Update product stock
+      try {
+        await updateProductStock(orderItems);
+        console.log("Product stock updated for guest order");
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
+      }
+
+      // Clean up
       global.pendingGuestOrders.delete(tran_id);
       console.log("Guest order created successfully:", order.orderNumber);
-    }
 
-    if (!order) {
-      console.error("Order not found for transaction ID:", tran_id);
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
+      // Send confirmation email
+      try {
+        const toEmail = guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email;
+        if (toEmail) {
+          await sendOrderEmails(order, toEmail);
+          console.log("✅ Guest order confirmation email sent");
+        }
+      } catch (mailError) {
+        console.error("❌ Failed to send guest confirmation email:", mailError);
+      }
 
-    // যদি অর্ডারটি আগে থেকেই 'paid' না থাকে, তাহলে স্ট্যাটাস আপডেট করুন
-    if (order.paymentStatus !== "paid") {
+      return res.status(200).json({
+        success: true,
+        message: "Guest order payment successful",
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
+        },
+      });
+    } else {
+      // Regular order processing
+      const order = await Order.findOne({ transactionId: tran_id });
+      if (!order) {
+        console.log("Order not found for transaction ID:", tran_id);
+        return res.status(404).json({
+          success: false,
+          message: "Order not found"
+        });
+      }
+
+      // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
       order.paymentStatus = "paid";
       order.status = "confirmed";
+
+      // Store payment gateway response
       order.paymentGatewayResponse = {
         pg_txnid: callbackData.pg_txnid,
         bank_txn: callbackData.bank_txn,
@@ -775,44 +834,72 @@ export const paymentSuccess = async (req, res) => {
         store_amount: callbackData.store_amount,
         currency: callbackData.currency
       };
+
       await order.save();
-      console.log(`Order ${order.orderNumber} updated to 'paid'`);
 
-      // ঐচ্ছিক: স্টক আপডেট এবং কার্ট ক্লিয়ার করুন
-      await updateProductStock(order.items);
-      if (!order.isGuestOrder) {
-        await Cart.findOneAndUpdate({ userId: order.userId }, { $set: { items: [], totalBaseAmount: 0, totalDiscountAmount: 0, finalAmount: 0, itemCount: 0 } });
+      // Update product stock
+      try {
+        await updateProductStock(order.items);
+        console.log("Product stock updated for regular order");
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
       }
 
-      // ঐচ্ছিক: পেমেন্ট সফল হওয়ার ইমেইল পাঠান
-      const toEmail = order?.shippingAddress?.email || (await User.findById(order.userId))?.email;
-      if (toEmail) {
-        await sendOrderEmails(order, toEmail);
-        console.log("✅ Order confirmation email sent");
+      // Clear user's cart
+      try {
+        await Cart.findOneAndUpdate(
+          { userId: order.userId },
+          {
+            $set: {
+              items: [],
+              totalBaseAmount: 0,
+              totalDiscountAmount: 0,
+              finalAmount: 0,
+              itemCount: 0,
+            },
+          }
+        );
+        console.log("Cart cleared for user:", order.userId);
+      } catch (cartError) {
+        console.error("Error clearing cart:", cartError);
       }
-    } else {
-      console.log("Order was already updated. Skipping.");
-    }
 
-    return res.status(200).json({
-      success: true,
-      message: "Payment successful",
-      data: {
-        order: {
-          _id: order._id,
-          orderNumber: order.orderNumber,
-          totalAmount: order.totalAmount,
-          status: order.status,
-          paymentStatus: order.paymentStatus,
+      console.log("Order payment confirmed successfully:", order.orderNumber);
+
+      // Send confirmation email
+      try {
+        const user = await User.findById(order.userId);
+        const toEmail = order?.shippingAddress?.email || user?.email;
+        if (toEmail) {
+          await sendOrderEmails(order, toEmail);
+          console.log("✅ Order confirmation email sent");
+        }
+      } catch (mailError) {
+        console.error("❌ Failed to send confirmation email:", mailError);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment successful",
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
         },
-      },
-    });
+      });
+    }
 
   } catch (error) {
     console.error("Payment success handler error:", error);
+
     if (req.method === "GET") {
       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
     }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",

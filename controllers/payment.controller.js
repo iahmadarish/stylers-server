@@ -73,113 +73,267 @@ function calculateGuestOrderAmount(guestOrderData) {
 // NEW: Initialize payment for guest orders
 // payment.controller.js - initializeGuestPayment function
 // payment.controller.js - initializeGuestPayment function
+// export const initializeGuestPayment = async (req, res) => {
+//   try {
+//     const { guestOrderData, customerInfo, orderInfo, paymentMethod } = req.body;
+
+//     console.log("=== Initialize Guest Payment Request ===");
+//     console.log("Guest Order Data:", JSON.stringify(guestOrderData, null, 2));
+//     console.log("Customer Info:", JSON.stringify(customerInfo, null, 2));
+
+//     // Calculate amounts
+//     const subtotal = guestOrderData.subtotal || guestOrderData.items.reduce((sum, item) =>
+//       sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1), 0);
+
+//     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city);
+//     const finalTotal = subtotal + shippingCost;
+//     const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+
+//     // Ensure guest order data has all required fields
+//     const completeGuestOrderData = {
+//       items: guestOrderData.items.map(item => ({
+//         productId: item.productId,
+//         productTitle: item.productTitle || "Unknown Product",
+//         productImage: item.productImage || "/placeholder.svg",
+//         variantId: item.variantId || null,
+//         colorVariantId: item.colorVariantId || null, // Keep as string, not ObjectId
+//         quantity: item.quantity || 1,
+//         originalPrice: item.originalPrice || 0,
+//         discountedPrice: item.discountedPrice || item.originalPrice || 0,
+//         discountPercentage: item.discountPercentage || 0,
+//         totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
+//         totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+//         discountAmount: ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
+//       })),
+//       subtotal: subtotal,
+//       totalDiscount: guestOrderData.totalDiscount || 0,
+//       shippingCost: shippingCost,
+//       totalAmount: finalTotal,
+//       shippingAddress: guestOrderData.shippingAddress,
+//       couponCode: guestOrderData.couponCode || null,
+//       specialInstructions: guestOrderData.specialInstructions || "",
+//       transactionId: tran_id,
+//       paymentStatus: "pending",
+//       customerInfo: customerInfo,
+//       paymentMethod: paymentMethod
+//     };
+
+//     // Aamarpay payment data preparation
+//     const store_id = process.env.AMARPAY_STORE_ID;
+//     const signature_key = process.env.AMARPAY_SIGNATURE_KEY;
+
+//     // Prepare payment data
+//     const paymentData = {
+//       store_id,
+//       signature_key,
+//       tran_id,
+//       amount: finalTotal.toFixed(2),
+//       currency: "BDT",
+//       desc: `Guest Order Payment`,
+//       cus_name: customerInfo.name,
+//       cus_email: customerInfo.email,
+//       cus_phone: customerInfo.phone,
+//       cus_add1: guestOrderData.shippingAddress.address.substring(0, 50),
+//       cus_city: guestOrderData.shippingAddress.city,
+//       cus_country: guestOrderData.shippingAddress.country || "Bangladesh",
+//       success_url: `${process.env.FRONTEND_URL}/payment/success/${tran_id}?isGuest=true`,
+//       fail_url: `${process.env.FRONTEND_URL}/payment/fail/${tran_id}?isGuest=true`,
+//       cancel_url: `${process.env.FRONTEND_URL}/payment/cancel/${tran_id}?isGuest=true`,
+//       notify_url: `${process.env.BACKEND_URL}/payment/notify`,
+//       type: 'json'
+//     };
+
+//     // Store guest order data temporarily
+//     global.pendingGuestOrders = global.pendingGuestOrders || new Map();
+//     global.pendingGuestOrders.set(tran_id, completeGuestOrderData);
+
+//     console.log("Stored guest order data for transaction:", tran_id);
+
+//     // Send request to Aamarpay
+//     const response = await axios.post(
+//       process.env.AMARPAY_PAYMENT_URL,
+//       paymentData,
+//       {
+//         headers: {
+//           'Content-Type': 'application/json'
+//         }
+//       }
+//     );
+
+//     if (response.data && response.data.payment_url) {
+//       res.status(200).json({
+//         success: true,
+//         message: "Payment initialized successfully",
+//         data: {
+//           payment_url: response.data.payment_url,
+//           transactionId: tran_id,
+//         },
+//       });
+//     } else {
+//       // Clean up if failed
+//       global.pendingGuestOrders.delete(tran_id);
+
+//       res.status(400).json({
+//         success: false,
+//         message: response.data.msg || "Payment initialization failed",
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error initializing guest payment:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message
+//     });
+//   }
+// };
+
+
 export const initializeGuestPayment = async (req, res) => {
   try {
-    const { guestOrderData, customerInfo, orderInfo, paymentMethod } = req.body;
-
     console.log("=== Initialize Guest Payment Request ===");
-    console.log("Guest Order Data:", JSON.stringify(guestOrderData, null, 2));
-    console.log("Customer Info:", JSON.stringify(customerInfo, null, 2));
+    console.log("Guest Order Data:", JSON.stringify(req.body, null, 2));
 
-    // Calculate amounts
-    const subtotal = guestOrderData.subtotal || guestOrderData.items.reduce((sum, item) =>
-      sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1), 0);
+    const { guestOrderData, customerInfo, paymentMethod } = req.body;
+
+    // ✅ Validation - Required fields check
+    if (!guestOrderData || !customerInfo) {
+      return res.status(400).json({
+        success: false,
+        message: "Guest order data and customer info are required"
+      });
+    }
+
+    if (!guestOrderData.items || !Array.isArray(guestOrderData.items) || guestOrderData.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order items are required"
+      });
+    }
+
+    if (!guestOrderData.shippingAddress || !guestOrderData.shippingAddress.address) {
+      return res.status(400).json({
+        success: false,
+        message: "Shipping address is required"
+      });
+    }
+
+    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Customer name, email, and phone are required"
+      });
+    }
+
+    // ✅ Calculate amounts properly
+    let subtotal = 0;
+    const processedItems = [];
+
+    for (const item of guestOrderData.items) {
+      const itemSubtotal = (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1);
+      subtotal += itemSubtotal;
+
+      processedItems.push({
+        ...item,
+        totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
+        totalDiscountedPrice: itemSubtotal,
+        discountAmount: ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
+      });
+    }
 
     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city);
     const finalTotal = subtotal + shippingCost;
-    const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-    // Ensure guest order data has all required fields
+    // ✅ Generate unique transaction ID
+    const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const orderNumber = `GUEST-${Date.now()}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+
+    // ✅ Store complete guest order data temporarily
+    global.pendingGuestOrders = global.pendingGuestOrders || new Map();
+    
     const completeGuestOrderData = {
-      items: guestOrderData.items.map(item => ({
-        productId: item.productId,
-        productTitle: item.productTitle || "Unknown Product",
-        productImage: item.productImage || "/placeholder.svg",
-        variantId: item.variantId || null,
-        colorVariantId: item.colorVariantId || null, // Keep as string, not ObjectId
-        quantity: item.quantity || 1,
-        originalPrice: item.originalPrice || 0,
-        discountedPrice: item.discountedPrice || item.originalPrice || 0,
-        discountPercentage: item.discountPercentage || 0,
-        totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
-        totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-        discountAmount: ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
-      })),
+      customerInfo: {
+        name: customerInfo.name,
+        email: customerInfo.email,
+        phone: customerInfo.phone,
+      },
+      items: processedItems,
       subtotal: subtotal,
       totalDiscount: guestOrderData.totalDiscount || 0,
       shippingCost: shippingCost,
       totalAmount: finalTotal,
       shippingAddress: guestOrderData.shippingAddress,
-      couponCode: guestOrderData.couponCode || null,
+      billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
       specialInstructions: guestOrderData.specialInstructions || "",
       transactionId: tran_id,
+      orderNumber: orderNumber,
       paymentStatus: "pending",
-      customerInfo: customerInfo,
-      paymentMethod: paymentMethod
+      paymentMethod: paymentMethod || "card"
     };
 
-    // Aamarpay payment data preparation
-    const store_id = process.env.AMARPAY_STORE_ID;
-    const signature_key = process.env.AMARPAY_SIGNATURE_KEY;
+    global.pendingGuestOrders.set(tran_id, completeGuestOrderData);
+    console.log("✅ Stored guest order data for transaction:", tran_id);
 
-    // Prepare payment data
+    // ✅ Aamarpay payment data preparation - JSON format
     const paymentData = {
-      store_id,
-      signature_key,
-      tran_id,
+      store_id: process.env.AMARPAY_STORE_ID,
+      signature_key: process.env.AMARPAY_SIGNATURE_KEY,
+      tran_id: tran_id,
       amount: finalTotal.toFixed(2),
       currency: "BDT",
-      desc: `Guest Order Payment`,
+      desc: `Guest Order ${orderNumber}`,
       cus_name: customerInfo.name,
       cus_email: customerInfo.email,
       cus_phone: customerInfo.phone,
       cus_add1: guestOrderData.shippingAddress.address.substring(0, 50),
-      cus_city: guestOrderData.shippingAddress.city,
+      cus_city: guestOrderData.shippingAddress.city || "Dhaka",
       cus_country: guestOrderData.shippingAddress.country || "Bangladesh",
-      success_url: `${process.env.FRONTEND_URL}/payment/success/${tran_id}?isGuest=true`,
-      fail_url: `${process.env.FRONTEND_URL}/payment/fail/${tran_id}?isGuest=true`,
-      cancel_url: `${process.env.FRONTEND_URL}/payment/cancel/${tran_id}?isGuest=true`,
-      notify_url: `${process.env.BACKEND_URL}/payment/notify`,
+      success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
+      fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
+      cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
+      notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: 'json'
     };
 
-    // Store guest order data temporarily
-    global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-    global.pendingGuestOrders.set(tran_id, completeGuestOrderData);
+    console.log("💳 Sending payment request to Aamarpay:", paymentData);
 
-    console.log("Stored guest order data for transaction:", tran_id);
-
-    // Send request to Aamarpay
+    // ✅ Send request to Aamarpay
     const response = await axios.post(
       process.env.AMARPAY_PAYMENT_URL,
       paymentData,
       {
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 15000
       }
     );
+
+    console.log("📥 Aamarpay response:", response.data);
 
     if (response.data && response.data.payment_url) {
       res.status(200).json({
         success: true,
-        message: "Payment initialized successfully",
+        message: "Guest payment initialized successfully",
         data: {
           payment_url: response.data.payment_url,
           transactionId: tran_id,
+          orderNumber: orderNumber,
+          amount: finalTotal
         },
       });
     } else {
       // Clean up if failed
       global.pendingGuestOrders.delete(tran_id);
-
+      
       res.status(400).json({
         success: false,
-        message: response.data.msg || "Payment initialization failed",
+        message: response.data?.msg || response.data?.message || "Payment initialization failed",
+        error: response.data
       });
     }
   } catch (error) {
-    console.error("Error initializing guest payment:", error);
+    console.error("❌ Error initializing guest payment:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -188,7 +342,14 @@ export const initializeGuestPayment = async (req, res) => {
   }
 };
 
-// Cash on Delivery order (existing - no changes needed)
+
+
+
+
+
+// Cash on Delivery order 
+// (For log in user only. guest user COD manageing from order controller. 
+// So don't change it for guest order. log in user can smoothly COD)
 export const createCODOrder = async (req, res) => {
   try {
     console.log("=== COD Order Request ===")

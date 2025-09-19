@@ -846,16 +846,18 @@ export const initializePayment = async (req, res) => {
 
 
 
+// COMPLETE FIXED: Payment Success Handler
 export const paymentSuccess = async (req, res) => {
   try {
     console.log("=== Payment Success Handler ===");
     console.log("Method:", req.method);
     console.log("Params:", req.params);
-    console.log("Body:", req.body);
     console.log("Query:", req.query);
+    console.log("Body:", req.body);
 
+    // Get transaction ID from different sources
     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-    const isGuest = req.query?.isGuest === "true" || tran_id.startsWith("GUEST_TXN_");
+    const isGuest = req.query?.isGuest === "true" || (tran_id && tran_id.startsWith("GUEST_TXN_"));
 
     if (!tran_id) {
       console.log("Transaction ID missing");
@@ -868,13 +870,24 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
-    // Handle GET request (user redirect)
+    console.log(`Processing ${isGuest ? 'GUEST' : 'REGULAR'} order with transaction ID:`, tran_id);
+
+    // Handle GET request (user redirect from payment gateway)
     if (req.method === "GET") {
       console.log("GET request - redirecting user to frontend");
       
       if (isGuest) {
-        return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
+        // For guest orders, check if order already exists
+        const existingOrder = await Order.findOne({ transactionId: tran_id });
+        if (existingOrder) {
+          console.log("Guest order found, redirecting to success page");
+          return res.redirect(`${process.env.FRONTEND_URL}/order-success?orderNumber=${existingOrder.orderNumber}&isGuest=true`);
+        } else {
+          console.log("Guest order not found yet, showing processing page");
+          return res.redirect(`${process.env.FRONTEND_URL}/payment-processing?transactionId=${tran_id}&isGuest=true`);
+        }
       } else {
+        // For regular orders
         const order = await Order.findOne({ transactionId: tran_id });
         if (order) {
           return res.redirect(`${process.env.FRONTEND_URL}/order-success/${order._id}`);
@@ -884,12 +897,14 @@ export const paymentSuccess = async (req, res) => {
       }
     }
 
-    console.log("POST request - Processing payment callback from Aamarpay");
+    // Handle POST request (server callback from payment gateway)
+    console.log("POST request - Processing payment callback");
     const callbackData = req.body;
 
     // Verify payment was successful
-    if (callbackData.pay_status !== "Successful") {
-      console.log("Payment not successful:", callbackData.pay_status);
+    const isPaymentSuccessful = callbackData.pay_status === "Successful";
+    if (!isPaymentSuccessful) {
+      console.log("Payment was not successful:", callbackData.pay_status);
       return res.status(400).json({
         success: false,
         message: "Payment was not successful",
@@ -897,71 +912,129 @@ export const paymentSuccess = async (req, res) => {
       });
     }
 
+    // Verify store credentials match (security check)
+    if (callbackData.store_id && callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
+      console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
+      return res.status(400).json({
+        success: false,
+        message: "Store ID verification failed"
+      });
+    }
+
+    console.log("Payment verification successful via callback");
+
     // Handle guest orders
     if (isGuest) {
       console.log("Processing guest order payment");
       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
       const guestOrderData = global.pendingGuestOrders.get(tran_id);
-      
+
       if (!guestOrderData) {
-        console.log("Guest order data not found");
+        console.log("Guest order data not found for transaction:", tran_id);
+        console.log("Available transaction IDs:", Array.from(global.pendingGuestOrders.keys()));
         return res.status(404).json({
           success: false,
           message: "Guest order data not found"
         });
       }
-      
-      // Create the guest order using the createGuestOrder function
-      try {
-        // Prepare request for createGuestOrder
-        const guestOrderRequest = {
-          body: {
-            customerInfo: guestOrderData.customerInfo,
-            shippingAddress: guestOrderData.shippingAddress,
-            billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-            items: guestOrderData.items,
-            paymentMethod: "card",
-            shippingCost: guestOrderData.shippingCost,
-            specialInstructions: guestOrderData.specialInstructions || ""
-          }
-        };
 
-        // Create a mock response object
-        const guestOrderResponse = {
-          status: (code) => ({
-            json: (data) => {
-              if (code === 201) {
-                console.log("Guest order created successfully");
-                // Clean up pending data
-                global.pendingGuestOrders.delete(tran_id);
-              }
-              return data;
-            }
-          })
-        };
-
-        // Call the createGuestOrder function
-        await createGuestOrder(guestOrderRequest, guestOrderResponse);
-        
+      // Check if order already exists to avoid duplicates
+      const existingOrder = await Order.findOne({ transactionId: tran_id });
+      if (existingOrder) {
+        console.log("Guest order already exists:", existingOrder.orderNumber);
+        // Clean up pending data
+        global.pendingGuestOrders.delete(tran_id);
         return res.status(200).json({
           success: true,
-          message: "Guest order payment successful"
-        });
-        
-      } catch (guestError) {
-        console.error("Error creating guest order:", guestError);
-        return res.status(500).json({
-          success: false,
-          message: "Failed to create guest order",
-          error: guestError.message
+          message: "Order already processed",
+          data: {
+            orderId: existingOrder._id,
+            orderNumber: existingOrder.orderNumber
+          }
         });
       }
+
+      // Generate order number
+      const orderCount = await Order.countDocuments();
+      const orderNumber = `GUEST-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
+
+      // Create guest order
+      const order = new Order({
+        isGuestOrder: true,
+        guestCustomerInfo: {
+          name: guestOrderData.customerInfo.name,
+          email: guestOrderData.customerInfo.email,
+          phone: guestOrderData.customerInfo.phone,
+        },
+        orderNumber: orderNumber,
+        transactionId: tran_id,
+        items: guestOrderData.items,
+        subtotal: guestOrderData.subtotal,
+        totalDiscount: guestOrderData.totalDiscount || 0,
+        shippingCost: guestOrderData.shippingCost,
+        tax: 0,
+        totalAmount: guestOrderData.totalAmount,
+        shippingAddress: guestOrderData.shippingAddress,
+        billingAddress: guestOrderData.billingAddress || guestOrderData.shippingAddress,
+        paymentMethod: "card",
+        couponCode: guestOrderData.couponCode || null,
+        couponDiscount: 0,
+        specialInstructions: guestOrderData.specialInstructions || "",
+        status: "confirmed",
+        paymentStatus: "paid",
+        paymentGatewayResponse: {
+          pg_txnid: callbackData.pg_txnid || callbackData.transaction_id,
+          bank_txn: callbackData.bank_txn,
+          card_type: callbackData.card_type,
+          pay_time: callbackData.pay_time || new Date().toISOString(),
+          amount: callbackData.amount || guestOrderData.totalAmount,
+          store_amount: callbackData.store_amount,
+          currency: callbackData.currency || "BDT"
+        }
+      });
+
+      await order.save();
+      console.log("Guest order created successfully:", order.orderNumber);
+
+      // Update product stock
+      try {
+        await updateProductStock(guestOrderData.items);
+        console.log("Product stock updated for guest order");
+      } catch (stockError) {
+        console.error("Error updating product stock:", stockError);
+      }
+
+      // Clean up pending data
+      global.pendingGuestOrders.delete(tran_id);
+
+      // Send confirmation email
+      try {
+        const toEmail = guestOrderData.customerInfo.email;
+        if (toEmail) {
+          await sendOrderEmails(order, toEmail, true);
+          console.log("Guest order confirmation email sent");
+        }
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Guest order payment successful",
+        data: {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          totalAmount: order.totalAmount,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+        },
+      });
     }
 
-    // Handle regular user orders (existing code)
+    // Handle regular user orders
     console.log("Processing regular user order payment");
     const order = await Order.findOne({ transactionId: tran_id });
-    
+
     if (!order) {
       console.log("Order not found for transaction ID:", tran_id);
       return res.status(404).json({
@@ -976,24 +1049,26 @@ export const paymentSuccess = async (req, res) => {
     
     // Store gateway response
     order.paymentGatewayResponse = {
-      pg_txnid: callbackData.pg_txnid,
+      pg_txnid: callbackData.pg_txnid || callbackData.transaction_id,
       bank_txn: callbackData.bank_txn,
       card_type: callbackData.card_type,
-      pay_time: callbackData.pay_time,
-      amount: callbackData.amount,
+      pay_time: callbackData.pay_time || new Date().toISOString(),
+      amount: callbackData.amount || order.totalAmount,
       store_amount: callbackData.store_amount,
-      currency: callbackData.currency
+      currency: callbackData.currency || "BDT"
     };
-    
+
     await order.save();
     console.log("Order payment confirmed:", order.orderNumber);
-    
+
     // Update product stock
-    if (order.items && order.items.length > 0) {
+    try {
       await updateProductStock(order.items);
-      console.log("Product stock updated");
+      console.log("Product stock updated for regular order");
+    } catch (stockError) {
+      console.error("Error updating product stock:", stockError);
     }
-    
+
     // Clear user's cart
     if (order.userId) {
       try {
@@ -1009,15 +1084,15 @@ export const paymentSuccess = async (req, res) => {
             },
           }
         );
-        console.log("Cart cleared for user");
+        console.log("Cart cleared for user:", order.userId);
       } catch (cartError) {
         console.error("Error clearing cart:", cartError.message);
       }
     }
-    
+
     // Send confirmation email
     try {
-      const user = order.userId ? await User.findById(order.userId) : null;
+      const user = await User.findById(order.userId);
       const toEmail = order?.shippingAddress?.email || user?.email;
       if (toEmail) {
         await sendOrderEmails(order, toEmail);
@@ -1030,8 +1105,15 @@ export const paymentSuccess = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Payment successful",
-      data: { orderId: order._id, orderNumber: order.orderNumber }
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+      },
     });
+
   } catch (error) {
     console.error("Payment success handler error:", error);
     if (req.method === "GET") {
@@ -1044,7 +1126,6 @@ export const paymentSuccess = async (req, res) => {
     });
   }
 };
-
 
 
 // UPDATED: Handle payment success - now handles both user and guest orders

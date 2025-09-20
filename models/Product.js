@@ -389,21 +389,29 @@ productSchema.pre("save", async  function (next) {
 
       // ✅ Determine the base price for this variant
       const variantBasePrice = variant.basePrice || this.basePrice
+// ✅ Determine discount percentage and timing
 let effectiveDiscountPercentage = 0
 let effectiveDiscountStart = null
 let effectiveDiscountEnd = null
 
-// Check if variant has its own discount settings
-// ✅ IMPORTANT: Only use variant discount if it's explicitly set (not null)
-if (variant.discountPercentage !== null && variant.discountPercentage !== undefined && variant.discountPercentage > 0) {
+// ✅ CRITICAL FIX: Check if variant has EXPLICITLY set discount (not null or undefined)
+const hasVariantDiscount = variant.discountPercentage !== null && 
+                          variant.discountPercentage !== undefined && 
+                          variant.discountPercentage > 0
+
+const hasExplicitNoDiscount = variant.discountPercentage === null
+
+if (hasVariantDiscount) {
   // Variant has its own discount
   effectiveDiscountPercentage = variant.discountPercentage
   effectiveDiscountStart = variant.discountStartTime
   effectiveDiscountEnd = variant.discountEndTime
   console.log(`Variant ${index} using own discount: ${effectiveDiscountPercentage}%`)
-} else if (variant.discountPercentage === null) {
+} else if (hasExplicitNoDiscount) {
   // ✅ EXPLICITLY NO DISCOUNT - variant has null discountPercentage
   effectiveDiscountPercentage = 0
+  effectiveDiscountStart = null
+  effectiveDiscountEnd = null
   console.log(`Variant ${index} explicitly has no discount (null)`)
 } else if (this.discountPercentage > 0) {
   // Use product-level discount ONLY if variant doesn't have explicit discount setting
@@ -411,6 +419,12 @@ if (variant.discountPercentage !== null && variant.discountPercentage !== undefi
   effectiveDiscountStart = this.discountStartTime
   effectiveDiscountEnd = this.discountEndTime
   console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
+} else {
+  // No discount at all
+  effectiveDiscountPercentage = 0
+  effectiveDiscountStart = null
+  effectiveDiscountEnd = null
+  console.log(`Variant ${index} has no discount`)
 }
 
       // ✅ Check if discount is currently active

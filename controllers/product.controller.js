@@ -122,42 +122,48 @@ export const createProduct = async (req, res) => {
         }
 
         // Process sizes inside the variant
-        variant.sizes.forEach((s) => {
-          const variantData = {
-            productCode: variant.productCode || generateProductCode(),
-            colorCode: variant.colorCode,
-            colorName: variant.colorName,
-            size: s.size,
-            dimension: s.dimension || "",
-            stock: Number.parseInt(s.stock) || 0,
-          }
+     variant.sizes.forEach((s) => {
+  const variantData = {
+    productCode: variant.productCode || generateProductCode(),
+    colorCode: variant.colorCode,
+    colorName: variant.colorName,
+    size: s.size,
+    dimension: s.dimension || "",
+    stock: Number.parseInt(s.stock) || 0,
+  }
 
-          // ✅ ONLY set variant-specific pricing if explicitly provided
-          if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-            variantData.basePrice = Number.parseFloat(variant.basePrice)
-          }
+  // ✅ ONLY set variant-specific pricing if explicitly provided
+  if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
+    variantData.basePrice = Number.parseFloat(variant.basePrice)
+  }
 
-          // ✅ ONLY set variant-specific discount if explicitly provided
-          if (variant.discountPercentage !== undefined && variant.discountPercentage !== null && variant.discountPercentage !== "") {
-            const discountPercentage = Number.parseFloat(variant.discountPercentage)
-            variantData.discountPercentage = discountPercentage
+  // ✅ CRITICAL FIX: Only set discount fields if explicitly provided
+  // If discountPercentage is provided (even 0), set it explicitly
+  if (variant.hasOwnProperty('discountPercentage')) {
+    const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
+    variantData.discountPercentage = discountPercentage
+    
+    if (discountPercentage > 0) {
+      variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
+      variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+    } else {
+      // Explicitly set to 0 to prevent product-level discount inheritance
+      variantData.discountPercentage = 0
+      variantData.discountStartTime = null
+      variantData.discountEndTime = null
+    }
+  } else {
+    // ✅ IMPORTANT: If discountPercentage is NOT provided, explicitly set to null
+    // This will prevent product-level discount inheritance
+    variantData.discountPercentage = null
+    variantData.discountStartTime = null
+    variantData.discountEndTime = null
+  }
 
-            // Only set discount times if discount is provided AND greater than 0
-            if (discountPercentage > 0) {
-              variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
-              variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
-            } else {
-              // If discount is 0, explicitly set to null to avoid inheritance
-              variantData.discountPercentage = 0
-              variantData.discountStartTime = null
-              variantData.discountEndTime = null
-            }
-          }
-
-          processedVariants.push(variantData)
-          totalStock += Number.parseInt(s.stock) || 0
-          console.log("[DEBUG] Added variant:", variantData)
-        })
+  processedVariants.push(variantData)
+  totalStock += Number.parseInt(s.stock) || 0
+  console.log("[DEBUG] Added variant:", variantData)
+})
       }
     }
 

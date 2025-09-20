@@ -205,6 +205,7 @@ const productSchema = new mongoose.Schema(
         },
         discountPercentage: {
           type: Number,
+           default: 0,
           min: [0, "Variant discount percentage cannot be negative"],
           max: [100, "Variant discount percentage cannot exceed 100"],
           // Will use product discountPercentage if not provided

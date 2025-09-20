@@ -390,25 +390,24 @@ productSchema.pre("save", async  function (next) {
       // ✅ Determine the base price for this variant
       const variantBasePrice = variant.basePrice || this.basePrice
 
-      // ✅ Determine discount percentage and timing
       let effectiveDiscountPercentage = 0
-      let effectiveDiscountStart = null
-      let effectiveDiscountEnd = null
+let effectiveDiscountStart = null
+let effectiveDiscountEnd = null
 
-      // Check if variant has its own discount settings
-      if (variant.discountPercentage !== undefined && variant.discountPercentage > 0) {
-        // Variant has its own discount
-        effectiveDiscountPercentage = variant.discountPercentage
-        effectiveDiscountStart = variant.discountStartTime
-        effectiveDiscountEnd = variant.discountEndTime
-        console.log(`Variant ${index} using own discount: ${effectiveDiscountPercentage}%`)
-      } else if (this.discountPercentage > 0) {
-        // Use product-level discount
-        effectiveDiscountPercentage = this.discountPercentage
-        effectiveDiscountStart = this.discountStartTime
-        effectiveDiscountEnd = this.discountEndTime
-        console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
-      }
+// Check if variant has its own discount settings
+if (variant.discountPercentage !== undefined && variant.discountPercentage > 0) {
+  // Variant has its own discount
+  effectiveDiscountPercentage = variant.discountPercentage
+  effectiveDiscountStart = variant.discountStartTime
+  effectiveDiscountEnd = variant.discountEndTime
+  console.log(`Variant ${index} using own discount: ${effectiveDiscountPercentage}%`)
+} else if (this.discountPercentage > 0) {
+  // Use product-level discount ONLY if variant doesn't have its own
+  effectiveDiscountPercentage = this.discountPercentage
+  effectiveDiscountStart = this.discountStartTime
+  effectiveDiscountEnd = this.discountEndTime
+  console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
+}
 
       // ✅ Check if discount is currently active
       const now = new Date()

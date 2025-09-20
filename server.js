@@ -59,6 +59,11 @@ const corsOptions = {
       "http://31.97.107.12:5173",
       "https://stylers-5q83.vercel.app",
       "https://stylersoutfit.vercel.app",
+
+      "https://admin.paarel.com",
+      "http://admin.paarel.com",
+      "admin.paarel.com",
+  
     ];
     
     // Allow requests with no origin (like mobile apps or curl requests)

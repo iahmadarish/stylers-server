@@ -375,76 +375,76 @@ productSchema.pre("save", async function (next) {
 
   // ✅ Calculate variant prices with proper time validation
   if (
-  this.variants &&
-  this.variants.length > 0 &&
-  (this.isModified("variants") || this.isNew)
-) {
-  console.log("Calculating variant prices...")
+    this.variants &&
+    this.variants.length > 0 &&
+    (this.isModified("variants") || this.isNew)
+  ) {
+    console.log("Calculating variant prices...")
 
-  this.variants.forEach((variant, index) => {
-    // Generate product code if not provided
-    if (!variant.productCode) {
-      variant.productCode = generateProductCode()
-    }
+    this.variants.forEach((variant, index) => {
+      // Generate product code if not provided
+      if (!variant.productCode) {
+        variant.productCode = generateProductCode()
+      }
 
-    // ✅ Determine the base price for this variant
-    // If variant has NO basePrice, use product basePrice
-    const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : this.basePrice
+      // ✅ Determine the base price for this variant
+      // If variant has NO basePrice, use product basePrice
+      const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : this.basePrice
 
-    // ✅ CRITICAL FIX: Apply discount based on your requirements
-    let effectiveDiscountPercentage = 0
-    let effectiveDiscountStart = null
-    let effectiveDiscountEnd = null
+      // ✅ CRITICAL FIX: Apply discount based on your requirements
+      let effectiveDiscountPercentage = 0
+      let effectiveDiscountStart = null
+      let effectiveDiscountEnd = null
 
-    // 1. If variant has EXPLICIT discount settings → use variant discount
-    if (variant.discountPercentage !== undefined && variant.discountPercentage !== null) {
-      effectiveDiscountPercentage = variant.discountPercentage
-      effectiveDiscountStart = variant.discountStartTime
-      effectiveDiscountEnd = variant.discountEndTime
-      console.log(`Variant ${index} using explicit discount: ${effectiveDiscountPercentage}%`)
-    }
-    // 2. If variant has NO basePrice AND NO discount → use product discount
-    else if (variant.basePrice === undefined && this.discountPercentage > 0) {
-      effectiveDiscountPercentage = this.discountPercentage
-      effectiveDiscountStart = this.discountStartTime
-      effectiveDiscountEnd = this.discountEndTime
-      console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
-    }
-    // 3. If variant has basePrice BUT NO discount → NO discount (only basePrice)
+      // 1. If variant has EXPLICIT discount settings → use variant discount
+      if (variant.discountPercentage !== undefined && variant.discountPercentage !== null) {
+        effectiveDiscountPercentage = variant.discountPercentage
+        effectiveDiscountStart = variant.discountStartTime
+        effectiveDiscountEnd = variant.discountEndTime
+        console.log(`Variant ${index} using explicit discount: ${effectiveDiscountPercentage}%`)
+      }
+      // 2. If variant has NO basePrice AND NO discount → use product discount
+      else if (variant.basePrice === undefined && this.discountPercentage > 0) {
+        effectiveDiscountPercentage = this.discountPercentage
+        effectiveDiscountStart = this.discountStartTime
+        effectiveDiscountEnd = this.discountEndTime
+        console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
+      }
+      // 3. If variant has basePrice BUT NO discount → NO discount (only basePrice)
 
-    // ✅ Check if discount is currently active
-    const now = new Date()
-    const isVariantDiscountActive =
-      effectiveDiscountPercentage > 0 &&
-      effectiveDiscountStart &&
-      effectiveDiscountEnd &&
-      now >= effectiveDiscountStart &&
-      now <= effectiveDiscountEnd
+      // ✅ Check if discount is currently active
+      const now = new Date()
+      const isVariantDiscountActive =
+        effectiveDiscountPercentage > 0 &&
+        effectiveDiscountStart &&
+        effectiveDiscountEnd &&
+        now >= effectiveDiscountStart &&
+        now <= effectiveDiscountEnd
 
-    console.log(`Variant ${index} discount check:`, {
-      variantBasePrice,
-      effectiveDiscountPercentage,
-      effectiveDiscountStart,
-      effectiveDiscountEnd,
-      currentTime: now,
-      isVariantDiscountActive
+      console.log(`Variant ${index} discount check:`, {
+        variantBasePrice,
+        effectiveDiscountPercentage,
+        effectiveDiscountStart,
+        effectiveDiscountEnd,
+        currentTime: now,
+        isVariantDiscountActive
+      })
+
+      // ✅ Calculate variant price
+      if (isVariantDiscountActive) {
+        const discountAmount = (variantBasePrice * effectiveDiscountPercentage) / 100
+        variant.price = Math.round(variantBasePrice - discountAmount)
+        console.log(`Variant ${index} price calculated: ${variantBasePrice} - ${discountAmount} = ${variant.price}`)
+      } else {
+        variant.price = variantBasePrice
+        console.log(`Variant ${index} price set to base: ${variant.price}`)
+      }
     })
 
-    // ✅ Calculate variant price
-    if (isVariantDiscountActive) {
-      const discountAmount = (variantBasePrice * effectiveDiscountPercentage) / 100
-      variant.price = Math.round(variantBasePrice - discountAmount)
-      console.log(`Variant ${index} price calculated: ${variantBasePrice} - ${discountAmount} = ${variant.price}`)
-    } else {
-      variant.price = variantBasePrice
-      console.log(`Variant ${index} price set to base: ${variant.price}`)
-    }
-  })
-
-  // ✅ Calculate total stock from variants
-  this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
-  console.log(`Total stock calculated: ${this.stock}`)
-}
+    // ✅ Calculate total stock from variants
+    this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
+    console.log(`Total stock calculated: ${this.stock}`)
+  }
 
   // ✅ Update stock status after price calculations
   this.updateStockStatus()
@@ -603,12 +603,12 @@ productSchema.methods.getCurrentPrice = function (variantId = null) {
       }
     }
     // 2. If variant has NO basePrice AND NO discount → use product discount
-    else if (variant.basePrice === undefined && 
-             this.discountPercentage > 0 &&
-             this.discountStartTime &&
-             this.discountEndTime &&
-             nowUTC >= this.discountStartTime &&
-             nowUTC <= this.discountEndTime) {
+    else if (variant.basePrice === undefined &&
+      this.discountPercentage > 0 &&
+      this.discountStartTime &&
+      this.discountEndTime &&
+      nowUTC >= this.discountStartTime &&
+      nowUTC <= this.discountEndTime) {
       const discountAmount = (basePrice * this.discountPercentage) / 100;
       return Math.round(basePrice - discountAmount);
     }
@@ -746,53 +746,53 @@ productSchema.statics.updateDiscountPrices = async function () {
 
       // Variant price update using same theory
       if (product.variants && product.variants.length > 0) {
-  for (const variant of product.variants) {
-    let shouldHaveVariantDiscount = false;
-    let effectiveDiscount = 0;
-    
-    // ✅ Determine base price: if variant has basePrice, use it; otherwise use product basePrice
-    const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : product.basePrice;
+        for (const variant of product.variants) {
+          let shouldHaveVariantDiscount = false;
+          let effectiveDiscount = 0;
 
-    // 1. If variant has EXPLICIT discount → use variant discount
-    if (variant.discountPercentage !== undefined && variant.discountPercentage !== null) {
-      shouldHaveVariantDiscount = variant.discountPercentage > 0 &&
-        variant.discountStartTime &&
-        variant.discountEndTime &&
-        nowUTC >= variant.discountStartTime &&
-        nowUTC <= variant.discountEndTime;
-      effectiveDiscount = variant.discountPercentage;
-      console.log(`[DEBUG] Variant has explicit discount: ${effectiveDiscount}%, active: ${shouldHaveVariantDiscount}`);
-    }
-    // 2. If variant has NO basePrice AND NO discount → use product discount
-    else if (variant.basePrice === undefined && product.discountPercentage > 0) {
-      shouldHaveVariantDiscount = isMainDiscountActive;
-      effectiveDiscount = product.discountPercentage;
-      console.log(`[DEBUG] Variant using product discount: ${effectiveDiscount}%, active: ${shouldHaveVariantDiscount}`);
-    }
-    // 3. If variant has basePrice BUT NO discount → NO discount (only basePrice)
+          // ✅ Determine base price: if variant has basePrice, use it; otherwise use product basePrice
+          const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : product.basePrice;
 
-    const currentlyHasVariantDiscount = variant.price !== variantBasePrice;
+          // 1. If variant has EXPLICIT discount → use variant discount
+          if (variant.discountPercentage !== undefined && variant.discountPercentage !== null) {
+            shouldHaveVariantDiscount = variant.discountPercentage > 0 &&
+              variant.discountStartTime &&
+              variant.discountEndTime &&
+              nowUTC >= variant.discountStartTime &&
+              nowUTC <= variant.discountEndTime;
+            effectiveDiscount = variant.discountPercentage;
+            console.log(`[DEBUG] Variant has explicit discount: ${effectiveDiscount}%, active: ${shouldHaveVariantDiscount}`);
+          }
+          // 2. If variant has NO basePrice AND NO discount → use product discount
+          else if (variant.basePrice === undefined && product.discountPercentage > 0) {
+            shouldHaveVariantDiscount = isMainDiscountActive;
+            effectiveDiscount = product.discountPercentage;
+            console.log(`[DEBUG] Variant using product discount: ${effectiveDiscount}%, active: ${shouldHaveVariantDiscount}`);
+          }
+          // 3. If variant has basePrice BUT NO discount → NO discount (only basePrice)
 
-    if (shouldHaveVariantDiscount && !currentlyHasVariantDiscount) {
-      const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
-      variant.price = Math.round(variantBasePrice - discountAmount);
-      needsUpdate = true;
-      console.log(`[ACTIVATE] Variant discounted price: ${variant.price}`);
-    } else if (!shouldHaveVariantDiscount && currentlyHasVariantDiscount) {
-      variant.price = variantBasePrice;
-      needsUpdate = true;
-      console.log(`[DEACTIVATE] Variant base price: ${variant.price}`);
-    } else if (shouldHaveVariantDiscount) {
-      const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
-      const newVariantPrice = Math.round(variantBasePrice - discountAmount);
-      if (variant.price !== newVariantPrice) {
-        variant.price = newVariantPrice;
-        needsUpdate = true;
-        console.log(`[UPDATE] Variant price updated: ${newVariantPrice}`);
+          const currentlyHasVariantDiscount = variant.price !== variantBasePrice;
+
+          if (shouldHaveVariantDiscount && !currentlyHasVariantDiscount) {
+            const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
+            variant.price = Math.round(variantBasePrice - discountAmount);
+            needsUpdate = true;
+            console.log(`[ACTIVATE] Variant discounted price: ${variant.price}`);
+          } else if (!shouldHaveVariantDiscount && currentlyHasVariantDiscount) {
+            variant.price = variantBasePrice;
+            needsUpdate = true;
+            console.log(`[DEACTIVATE] Variant base price: ${variant.price}`);
+          } else if (shouldHaveVariantDiscount) {
+            const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
+            const newVariantPrice = Math.round(variantBasePrice - discountAmount);
+            if (variant.price !== newVariantPrice) {
+              variant.price = newVariantPrice;
+              needsUpdate = true;
+              console.log(`[UPDATE] Variant price updated: ${newVariantPrice}`);
+            }
+          }
+        }
       }
-    }
-  }
-}
 
       if (needsUpdate) {
         // ✅ IMPORTANT: pre-save hook skip direct update 

@@ -413,8 +413,7 @@ if (hasVariantDiscount) {
   effectiveDiscountStart = null
   effectiveDiscountEnd = null
   console.log(`Variant ${index} explicitly has no discount (null)`)
-} else if (this.discountPercentage > 0) {
-  // Use product-level discount ONLY if variant doesn't have explicit discount setting
+}else if (!variant.basePrice && this.discountPercentage > 0) {
   effectiveDiscountPercentage = this.discountPercentage
   effectiveDiscountStart = this.discountStartTime
   effectiveDiscountEnd = this.discountEndTime

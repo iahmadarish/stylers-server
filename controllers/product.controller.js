@@ -122,27 +122,48 @@ export const createProduct = async (req, res) => {
         }
 
         // Process sizes inside the variant
-        variant.sizes.forEach((s) => {
-          const variantData = {
-            productCode: variant.productCode || generateProductCode(),
-            colorCode: variant.colorCode,
-            colorName: variant.colorName,
-            size: s.size,
-            dimension: s.dimension || "",
-            stock: Number.parseInt(s.stock) || 0,
-            // ✅ IMPORTANT: Add variant-specific pricing fields
-            ...(variant.basePrice && { basePrice: Number.parseFloat(variant.basePrice) }),
-            ...(variant.discountPercentage !== undefined && {
-              discountPercentage: Number.parseFloat(variant.discountPercentage),
-            }),
-            ...(variant.discountStartTime && { discountStartTime: new Date(variant.discountStartTime) }),
-            ...(variant.discountEndTime && { discountEndTime: new Date(variant.discountEndTime) }),
-          }
+     variant.sizes.forEach((s) => {
+  const variantData = {
+    productCode: variant.productCode || generateProductCode(),
+    colorCode: variant.colorCode,
+    colorName: variant.colorName,
+    size: s.size,
+    dimension: s.dimension || "",
+    stock: Number.parseInt(s.stock) || 0,
+  }
 
-          processedVariants.push(variantData)
-          totalStock += Number.parseInt(s.stock) || 0
-          console.log("[DEBUG] Added variant:", variantData)
-        })
+  // ✅ ONLY set variant-specific pricing if explicitly provided
+  if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
+    variantData.basePrice = Number.parseFloat(variant.basePrice)
+  }
+
+  // ✅ CRITICAL FIX: Only set discount fields if explicitly provided
+  // If discountPercentage is provided (even 0), set it explicitly
+  if (variant.hasOwnProperty('discountPercentage')) {
+  const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
+  variantData.discountPercentage = discountPercentage
+  
+  if (discountPercentage > 0) {
+    variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
+    variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+  } else {
+    // Explicitly set to 0 to prevent product-level discount inheritance
+    variantData.discountPercentage = 0
+    variantData.discountStartTime = null
+    variantData.discountEndTime = null
+  }
+} else {
+  // ✅ IMPORTANT: If discountPercentage is NOT provided in the form data,
+  // set to null to explicitly indicate NO discount should be applied
+  variantData.discountPercentage = null
+  variantData.discountStartTime = null
+  variantData.discountEndTime = null
+}
+
+  processedVariants.push(variantData)
+  totalStock += Number.parseInt(s.stock) || 0
+  console.log("[DEBUG] Added variant:", variantData)
+})
       }
     }
 
@@ -436,217 +457,6 @@ export const getProduct = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Update product
-// @route   PATCH /api/products/:id
-// @access  Private/Admin
-
-// export const updateProduct = catchAsync(async (req, res, next) => {
-//   console.log("=== UPDATE PRODUCT START ===")
-//   console.log("Product ID:", req.params.id)
-//   console.log("Files received:", req.files ? req.files.length : 0)
-
-//   try {
-//     // Parse JSON data
-//     let productData
-//     if (typeof req.body.productData === "string") {
-//       productData = JSON.parse(req.body.productData)
-//     } else {
-//       productData = req.body
-//     }
-
-//     console.log("Parsed product data:", {
-//       variantsCount: productData.variants ? productData.variants.length : 0,
-//       deleteImagesCount: productData.deleteImages ? productData.deleteImages.length : 0,
-//       basePrice: productData.basePrice,
-//       discountPercentage: productData.discountPercentage,
-//       discountStartTime: productData.discountStartTime,
-//       discountEndTime: productData.discountEndTime,
-//     })
-
-//     // Get existing product
-//     const existingProduct = await Product.findById(req.params.id)
-//     if (!existingProduct) {
-//       return res.status(404).json({
-//         status: "error",
-//         message: "Product not found",
-//       })
-//     }
-
-//     // Handle image deletions first
-//     if (productData.deleteImages && productData.deleteImages.length > 0) {
-//       console.log("Deleting images:", productData.deleteImages)
-//       for (const imageUrl of productData.deleteImages) {
-//         try {
-//           const publicId = getPublicIdFromUrl(imageUrl)
-//           await deleteImage(publicId)
-//           console.log("Deleted image:", imageUrl)
-//         } catch (error) {
-//           console.error("Error deleting image:", error)
-//         }
-//       }
-
-//       // Remove deleted images from existing product
-//       existingProduct.images = existingProduct.images.filter(
-//         (img) => !productData.deleteImages.includes(typeof img === "string" ? img : img.url),
-//       )
-//     }
-
-//     // Process new images and create proper image structure
-//     const processedImages = [...existingProduct.images] // Start with remaining existing images
-
-//     if (req.files && req.files.length > 0) {
-//       console.log("Processing", req.files.length, "new files")
-
-//       // Add new images with proper structure
-//       req.files.forEach((file, fileIndex) => {
-//         // ✅ CORRECTED: Frontend থেকে imageColorCode_0, imageColorName_0 format এ data আসে
-//         const colorCode = req.body[`imageColorCode_${fileIndex}`] || "#000000"
-//         const colorName = req.body[`imageColorName_${fileIndex}`] || "Default"
-
-//         processedImages.push({
-//           url: file.path,
-//           colorCode: colorCode,
-//           colorName: colorName,
-//         })
-
-//         console.log("Added new image with color:", colorCode, colorName)
-//       })
-//     }
-//     // Update the product images
-//     existingProduct.images = processedImages
-
-//     // ✅ CRITICAL: Update product-level pricing with time validation
-//     if (productData.basePrice !== undefined) {
-//       existingProduct.basePrice = Number.parseFloat(productData.basePrice)
-//     }
-
-//     // ✅ Update discount with proper time validation
-//     if (productData.discountPercentage !== undefined) {
-//       existingProduct.discountPercentage = Number.parseFloat(productData.discountPercentage) || 0
-
-//       // ✅ IMPORTANT: Set discount times - these are required for time validation
-//       if (existingProduct.discountPercentage > 0) {
-//         existingProduct.discountStartTime = productData.discountStartTime
-//           ? new Date(productData.discountStartTime)
-//           : new Date()
-//         existingProduct.discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : null
-//       } else {
-//         existingProduct.discountStartTime = null
-//         existingProduct.discountEndTime = null
-//       }
-//     }
-
-//     // ✅ Process variants with proper pricing logic
-//     if (productData.variants && Array.isArray(productData.variants)) {
-//       console.log("Processing variants:", productData.variants.length)
-
-//       const processedVariants = productData.variants.map((variant) => {
-//         const processedVariant = {
-//           _id: variant._id, // Keep existing ID for updates
-//           colorCode: variant.colorCode || "#000000",
-//           colorName: variant.colorName || "Default",
-//           size: variant.size || "",
-//           dimension: variant.dimension || "",
-//           stock: Number.parseInt(variant.stock) || 0,
-//           productCode: variant.productCode || generateProductCode(), // Use the declared function
-//         }
-
-//         // ✅ Handle variant-specific pricing with time validation
-//         if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-//           processedVariant.basePrice = Number.parseFloat(variant.basePrice)
-//         }
-
-//         // ✅ Handle variant-specific discount with time validation
-//         if (
-//           variant.discountPercentage !== undefined &&
-//           variant.discountPercentage !== null &&
-//           variant.discountPercentage !== ""
-//         ) {
-//           processedVariant.discountPercentage = Number.parseFloat(variant.discountPercentage)
-
-//           // ✅ Set variant discount times if variant has custom discount
-//           if (processedVariant.discountPercentage > 0) {
-//             processedVariant.discountStartTime = variant.discountStartTime
-//               ? new Date(variant.discountStartTime)
-//               : new Date()
-//             processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null
-//           }
-//         }
-
-//         return processedVariant
-//       })
-
-//       // Calculate total stock from variants
-//       const totalStock = processedVariants.reduce((sum, variant) => sum + (variant.stock || 0), 0)
-
-//       existingProduct.variants = processedVariants
-//       existingProduct.stock = totalStock
-
-//       console.log("Processed variants with pricing:", processedVariants.length)
-//     }
-
-//     // Update other fields (excluding price - it will be calculated by pre-save hook)
-//     const excludedFields = [
-//       "variants",
-//       "images",
-//       "deleteImages",
-//       "price",
-//       "discountPercentage",
-//       "discountStartTime",
-//       "discountEndTime",
-//     ]
-//     Object.keys(productData).forEach((key) => {
-//       if (productData[key] !== undefined && !excludedFields.includes(key)) {
-//         existingProduct[key] = productData[key]
-//       }
-//     })
-
-//     // ✅ IMPORTANT: Save the product - this will trigger pre-save hooks for automatic price calculation
-//     const updatedProduct = await existingProduct.save()
-
-//     await updatedProduct.populate([
-//       { path: "parentCategoryId", select: "name slug" },
-//       { path: "subCategoryId", select: "name slug" },
-//       { path: "dressTypeId", select: "name slug" },
-//       { path: "styleId", select: "name slug" },
-//     ])
-
-//     console.log("Product updated successfully with calculated prices:")
-//     console.log("Main price:", updatedProduct.price)
-//     console.log(
-//       "Variants with calculated prices:",
-//       updatedProduct.variants?.map((v) => ({
-//         colorName: v.colorName,
-//         size: v.size,
-//         basePrice: v.basePrice,
-//         price: v.price,
-//         discountPercentage: v.discountPercentage,
-//       })),
-//     )
-
-//     res.status(200).json({
-//       status: "success",
-//       data: {
-//         product: updatedProduct,
-//       },
-//     })
-//   } catch (error) {
-//     console.error("Error updating product:", error)
-//     res.status(500).json({
-//       status: "error",
-//       message: error.message || "Internal server error",
-//     })
-//   }
-// })
-
-
-
-// @desc    Update product
-// @route   PATCH /api/products/:id
-// @access  Private/Admin
-
-
-
 
 export const updateProduct = catchAsync(async (req, res, next) => {
   console.log("=== UPDATE PRODUCT START ===");
@@ -734,17 +544,17 @@ export const updateProduct = catchAsync(async (req, res, next) => {
 
       // Only update times if they are explicitly provided in the request
       if (productData.discountStartTime !== undefined) {
-        existingProduct.discountStartTime = productData.discountStartTime 
+        existingProduct.discountStartTime = productData.discountStartTime
           ? new Date(productData.discountStartTime)
           : null;
       }
-      
+
       if (productData.discountEndTime !== undefined) {
-        existingProduct.discountEndTime = productData.discountEndTime 
+        existingProduct.discountEndTime = productData.discountEndTime
           ? new Date(productData.discountEndTime)
           : null;
       }
-      
+
       // If discount is being set to 0, clear the times
       if (newDiscountPercentage <= 0) {
         existingProduct.discountStartTime = null;

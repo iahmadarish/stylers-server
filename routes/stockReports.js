@@ -4,7 +4,6 @@ import { protect, admin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// স্টক রিপোর্ট পাওয়ার জন্য (এডমিন Only)
 router.get("/", protect, admin, async (req, res) => {
   try {
     const { 
@@ -16,12 +15,10 @@ router.get("/", protect, admin, async (req, res) => {
     
     let query = { isActive: true };
     
-    // স্ট্যাটাস অনুযায়ী ফিল্টার
     if (status) {
       query.stockStatus = status;
     }
     
-    // শুধুমাত্র লো-স্টক প্রোডাক্ট দেখানোর জন্য
     if (lowStockOnly === "true") {
       query.stockStatus = "low_stock";
     }
@@ -34,7 +31,6 @@ router.get("/", protect, admin, async (req, res) => {
     
     const total = await Product.countDocuments(query);
     
-    // স্টক সামারি তৈরি করুন
     const stockSummary = {
       totalProducts: total,
       inStock: await Product.countDocuments({ ...query, stockStatus: "in_stock" }),

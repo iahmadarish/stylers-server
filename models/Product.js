@@ -382,78 +382,56 @@ productSchema.pre("save", async  function (next) {
     console.log("Calculating variant prices...")
 
     this.variants.forEach((variant, index) => {
-      // Generate product code if not provided
-      if (!variant.productCode) {
-        variant.productCode = generateProductCode()
-      }
+  if (!variant.productCode) {
+    variant.productCode = generateProductCode()
+  }
 
-      // ✅ Determine the base price for this variant
-      const variantBasePrice = variant.basePrice || this.basePrice
-// ✅ Determine discount percentage and timing
-let effectiveDiscountPercentage = 0
-let effectiveDiscountStart = null
-let effectiveDiscountEnd = null
+  // ✅ Variant base price fallback
+  const variantBasePrice = variant.basePrice || this.basePrice
 
-// ✅ CRITICAL FIX: Check if variant has EXPLICITLY set discount (not null or undefined)
-const hasVariantDiscount = variant.discountPercentage !== null && 
-                          variant.discountPercentage !== undefined && 
-                          variant.discountPercentage > 0
+  let effectiveDiscountPercentage = 0
+  let effectiveDiscountStart = null
+  let effectiveDiscountEnd = null
 
-const hasExplicitNoDiscount = variant.discountPercentage === null
+  // Case 1: Variant has its own discount
+  if (variant.basePrice && variant.discountPercentage > 0) {
+    effectiveDiscountPercentage = variant.discountPercentage
+    effectiveDiscountStart = variant.discountStartTime
+    effectiveDiscountEnd = variant.discountEndTime
+    console.log(`Variant ${index} using own discount: ${effectiveDiscountPercentage}%`)
+  }
+  // Case 2: Variant has basePrice but NO discount → ignore product discount
+  else if (variant.basePrice && (!variant.discountPercentage || variant.discountPercentage === 0)) {
+    effectiveDiscountPercentage = 0
+    console.log(`Variant ${index} has basePrice only (no discount)`)
+  }
+  // Case 3: Variant has NO basePrice → use product discount if available
+  else if (!variant.basePrice && this.discountPercentage > 0) {
+    effectiveDiscountPercentage = this.discountPercentage
+    effectiveDiscountStart = this.discountStartTime
+    effectiveDiscountEnd = this.discountEndTime
+    console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
+  }
 
-if (hasVariantDiscount) {
-  // Variant has its own discount
-  effectiveDiscountPercentage = variant.discountPercentage
-  effectiveDiscountStart = variant.discountStartTime
-  effectiveDiscountEnd = variant.discountEndTime
-  console.log(`Variant ${index} using own discount: ${effectiveDiscountPercentage}%`)
-} else if (hasExplicitNoDiscount) {
-  // ✅ EXPLICITLY NO DISCOUNT - variant has null discountPercentage
-  effectiveDiscountPercentage = 0
-  effectiveDiscountStart = null
-  effectiveDiscountEnd = null
-  console.log(`Variant ${index} explicitly has no discount (null)`)
-}else if (!variant.basePrice && this.discountPercentage > 0) {
-  effectiveDiscountPercentage = this.discountPercentage
-  effectiveDiscountStart = this.discountStartTime
-  effectiveDiscountEnd = this.discountEndTime
-  console.log(`Variant ${index} using product discount: ${effectiveDiscountPercentage}%`)
-} else {
-  // No discount at all
-  effectiveDiscountPercentage = 0
-  effectiveDiscountStart = null
-  effectiveDiscountEnd = null
-  console.log(`Variant ${index} has no discount`)
-}
+  // ✅ Apply discount if active
+  const now = new Date()
+  const isVariantDiscountActive =
+    effectiveDiscountPercentage > 0 &&
+    effectiveDiscountStart &&
+    effectiveDiscountEnd &&
+    now >= effectiveDiscountStart &&
+    now <= effectiveDiscountEnd
 
-      // ✅ Check if discount is currently active
-      const now = new Date()
-      const isVariantDiscountActive =
-        effectiveDiscountPercentage > 0 &&
-        effectiveDiscountStart &&
-        effectiveDiscountEnd &&
-        now >= effectiveDiscountStart &&
-        now <= effectiveDiscountEnd
+  if (isVariantDiscountActive) {
+    const discountAmount = (variantBasePrice * effectiveDiscountPercentage) / 100
+    variant.price = Math.round(variantBasePrice - discountAmount)
+    console.log(`Variant ${index} discounted price: ${variant.price}`)
+  } else {
+    variant.price = variantBasePrice
+    console.log(`Variant ${index} price set to base: ${variant.price}`)
+  }
+})
 
-      console.log(`Variant ${index} discount check:`, {
-        variantBasePrice,
-        effectiveDiscountPercentage,
-        effectiveDiscountStart,
-        effectiveDiscountEnd,
-        currentTime: now,
-        isVariantDiscountActive
-      })
-
-      // ✅ Calculate variant price
-      if (isVariantDiscountActive) {
-        const discountAmount = (variantBasePrice * effectiveDiscountPercentage) / 100
-        variant.price = Math.round(variantBasePrice - discountAmount)
-        console.log(`Variant ${index} price calculated: ${variantBasePrice} - ${discountAmount} = ${variant.price}`)
-      } else {
-        variant.price = variantBasePrice
-        console.log(`Variant ${index} price set to base: ${variant.price}`)
-      }
-    })
 
     // ✅ Calculate total stock from variants
     this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
@@ -591,55 +569,118 @@ productSchema.methods.isVariantDiscountActive = function (variantId) {
 //   }
 // }
 
+// productSchema.methods.getCurrentPrice = function (variantId = null) {
+//   const nowUTC = new Date(); // use utc time in all time
+
+//   if (variantId) {
+//     const variant = this.variants.id(variantId);
+//     if (!variant) {
+//       throw new Error("Variant not found");
+//     }
+
+//     const basePrice = variant.basePrice || this.basePrice;
+
+//     // Check variant-specific discount first
+//     if (variant.discountPercentage > 0) {
+//       const isActive = variant.discountStartTime &&
+//         variant.discountEndTime &&
+//         nowUTC >= variant.discountStartTime &&
+//         nowUTC <= variant.discountEndTime;
+
+//       if (isActive) {
+//         const discountAmount = (basePrice * variant.discountPercentage) / 100;
+//         return Math.round(basePrice - discountAmount);
+//       }
+//     }
+
+//     // Check product-level discount
+//     if (this.discountPercentage > 0 &&
+//       this.discountStartTime &&
+//       this.discountEndTime &&
+//       nowUTC >= this.discountStartTime &&
+//       nowUTC <= this.discountEndTime) {
+//       const discountAmount = (basePrice * this.discountPercentage) / 100;
+//       return Math.round(basePrice - discountAmount);
+//     }
+
+//     return basePrice;
+//   } else {
+//     // Product-level price
+//     if (this.discountPercentage > 0 &&
+//       this.discountStartTime &&
+//       this.discountEndTime &&
+//       nowUTC >= this.discountStartTime &&
+//       nowUTC <= this.discountEndTime) {
+//       const discountAmount = (this.basePrice * this.discountPercentage) / 100;
+//       return Math.round(this.basePrice - discountAmount);
+//     }
+
+//     return this.basePrice;
+//   }
+// };
+
 productSchema.methods.getCurrentPrice = function (variantId = null) {
-  const nowUTC = new Date(); // use utc time in all time
+  const now = new Date()
 
   if (variantId) {
-    const variant = this.variants.id(variantId);
-    if (!variant) {
-      throw new Error("Variant not found");
-    }
+    const variant = this.variants.id(variantId)
+    if (!variant) throw new Error("Variant not found")
 
-    const basePrice = variant.basePrice || this.basePrice;
+    const basePrice = variant.basePrice || this.basePrice
 
-    // Check variant-specific discount first
-    if (variant.discountPercentage > 0) {
-      const isActive = variant.discountStartTime &&
+    // Variant has its own discount
+    if (variant.basePrice && variant.discountPercentage > 0) {
+      const isActive =
+        variant.discountStartTime &&
         variant.discountEndTime &&
-        nowUTC >= variant.discountStartTime &&
-        nowUTC <= variant.discountEndTime;
+        now >= variant.discountStartTime &&
+        now <= variant.discountEndTime
 
       if (isActive) {
-        const discountAmount = (basePrice * variant.discountPercentage) / 100;
-        return Math.round(basePrice - discountAmount);
+        const discountAmount = (basePrice * variant.discountPercentage) / 100
+        return Math.round(basePrice - discountAmount)
+      }
+      return basePrice
+    }
+
+    // Variant has basePrice but no discount → just basePrice
+    if (variant.basePrice && (!variant.discountPercentage || variant.discountPercentage === 0)) {
+      return basePrice
+    }
+
+    // Variant has no basePrice → fallback to product-level discount
+    if (!variant.basePrice && this.discountPercentage > 0) {
+      const isActive =
+        this.discountStartTime &&
+        this.discountEndTime &&
+        now >= this.discountStartTime &&
+        now <= this.discountEndTime
+
+      if (isActive) {
+        const discountAmount = (this.basePrice * this.discountPercentage) / 100
+        return Math.round(this.basePrice - discountAmount)
       }
     }
 
-    // Check product-level discount
-    if (this.discountPercentage > 0 &&
-      this.discountStartTime &&
-      this.discountEndTime &&
-      nowUTC >= this.discountStartTime &&
-      nowUTC <= this.discountEndTime) {
-      const discountAmount = (basePrice * this.discountPercentage) / 100;
-      return Math.round(basePrice - discountAmount);
-    }
-
-    return basePrice;
-  } else {
-    // Product-level price
-    if (this.discountPercentage > 0 &&
-      this.discountStartTime &&
-      this.discountEndTime &&
-      nowUTC >= this.discountStartTime &&
-      nowUTC <= this.discountEndTime) {
-      const discountAmount = (this.basePrice * this.discountPercentage) / 100;
-      return Math.round(this.basePrice - discountAmount);
-    }
-
-    return this.basePrice;
+    return basePrice
   }
-};
+
+  // ✅ Product-level price (same as before)
+  if (
+    this.discountPercentage > 0 &&
+    this.discountStartTime &&
+    this.discountEndTime &&
+    now >= this.discountStartTime &&
+    now <= this.discountEndTime
+  ) {
+    const discountAmount = (this.basePrice * this.discountPercentage) / 100
+    return Math.round(this.basePrice - discountAmount)
+  }
+
+  return this.basePrice
+}
+
+
 
 // ✅ Method to get images by color code
 productSchema.methods.getImagesByColor = function (colorCode) {

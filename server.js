@@ -50,6 +50,11 @@ const corsOptions = {
       "http://paarel.com",
       "https://www.paarel.com",
       "https://paarel.com",
+
+   "https://staging.paarel.com",
+      "http://staging.paarel.com",
+      "staging.paarel.com",
+
       "http://31.97.107.12",
       "http://31.97.107.12:5173",
       "https://stylers-5q83.vercel.app",

@@ -12,9 +12,7 @@ import { generateProductCode } from "../utils/productCodeGenerator.js" // Declar
 import { checkAndNotifyStockStatus } from "../utils/stockNotifier.js"
 
 
-// @desc    Create a product
-// @route   POST /api/products
-// @access  Private/Admin
+
 export const createProduct = async (req, res) => {
   try {
     console.log("[DEBUG] Starting product creation...")
@@ -58,7 +56,7 @@ export const createProduct = async (req, res) => {
       const colorName = req.body[`imageColorName_${index}`] || "Unknown Color"
 
       images.push({
-        url: file.path, // This will be the path where multer saved the file
+        url: file.path,
         colorCode,
         colorName,
       })
@@ -130,13 +128,31 @@ export const createProduct = async (req, res) => {
             size: s.size,
             dimension: s.dimension || "",
             stock: Number.parseInt(s.stock) || 0,
-            // ✅ IMPORTANT: Add variant-specific pricing fields
-            ...(variant.basePrice && { basePrice: Number.parseFloat(variant.basePrice) }),
-            ...(variant.discountPercentage !== undefined && {
-              discountPercentage: Number.parseFloat(variant.discountPercentage),
-            }),
-            ...(variant.discountStartTime && { discountStartTime: new Date(variant.discountStartTime) }),
-            ...(variant.discountEndTime && { discountEndTime: new Date(variant.discountEndTime) }),
+          }
+
+          // ✅ FIXED: Only add variant-specific pricing if explicitly provided
+          if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
+            variantData.basePrice = Number.parseFloat(variant.basePrice)
+          }
+
+          // ✅ FIXED: Only add discount fields if explicitly provided and valid
+          if (variant.discountPercentage !== undefined && variant.discountPercentage !== null && variant.discountPercentage !== "") {
+            const discountPercentage = Number.parseFloat(variant.discountPercentage)
+            if (discountPercentage > 0) {
+              variantData.discountPercentage = discountPercentage
+              variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : new Date()
+              variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null
+            } else {
+              // If discount is 0 or negative, don't set any discount fields
+              variantData.discountPercentage = 0
+              variantData.discountStartTime = null
+              variantData.discountEndTime = null
+            }
+          } else {
+            // If no discount provided, explicitly set to 0 to avoid inheriting product discount
+            variantData.discountPercentage = 0
+            variantData.discountStartTime = null
+            variantData.discountEndTime = null
           }
 
           processedVariants.push(variantData)
@@ -192,8 +208,8 @@ export const createProduct = async (req, res) => {
       basePrice: Number.parseFloat(productData.basePrice),
       // ✅ CRITICAL: Set discount fields properly
       discountPercentage: discountPercentage,
-      discountStartTime: discountStartTime,
-      discountEndTime: discountEndTime,
+      discountStartTime: discountPercentage > 0 ? discountStartTime : null,
+      discountEndTime: discountPercentage > 0 ? discountEndTime : null,
       images,
       variants: processedVariants,
       stock: totalStock,
@@ -217,6 +233,12 @@ export const createProduct = async (req, res) => {
       discountStartTime: newProduct.discountStartTime,
       discountEndTime: newProduct.discountEndTime,
       variantsCount: newProduct.variants.length,
+      variants: newProduct.variants.map(v => ({
+        basePrice: v.basePrice,
+        discountPercentage: v.discountPercentage,
+        discountStartTime: v.discountStartTime,
+        discountEndTime: v.discountEndTime
+      }))
     })
 
     console.log("[DEBUG] About to save product...")
@@ -272,6 +294,269 @@ export const createProduct = async (req, res) => {
     })
   }
 }
+
+
+
+// @desc    Create a product
+// @route   POST /api/products
+// @access  Private/Admin
+// export const createProduct = async (req, res) => {
+//   try {
+//     console.log("[DEBUG] Starting product creation...")
+//     console.log("[DEBUG] Request body keys:", Object.keys(req.body))
+//     console.log("[DEBUG] Files received:", req.files?.length || 0)
+
+//     // Parse product data from form data
+//     const productData = JSON.parse(req.body.productData)
+//     const uploadedFiles = req.files || []
+
+//     console.log("[DEBUG] Parsed product data:", productData)
+
+//     // Required fields validation
+//     const requiredFields = [
+//       "title",
+//       "description",
+//       "brand",
+//       "parentCategoryId",
+//       "subCategoryId",
+//       "dressTypeId",
+//       "styleId",
+//       "basePrice",
+//       "gender",
+//     ]
+
+//     for (const field of requiredFields) {
+//       if (!productData[field]) {
+//         console.log("[DEBUG] Missing required field:", field)
+//         return res.status(400).json({
+//           status: "error",
+//           message: `${field} is required`,
+//         })
+//       }
+//     }
+
+//     // Process images from uploaded files
+//     const images = []
+
+//     uploadedFiles.forEach((file, index) => {
+//       const colorCode = req.body[`imageColorCode_${index}`] || "#000000"
+//       const colorName = req.body[`imageColorName_${index}`] || "Unknown Color"
+
+//       images.push({
+//         url: file.path, // This will be the path where multer saved the file
+//         colorCode,
+//         colorName,
+//       })
+//     })
+
+//     console.log("[DEBUG] Processed images:", images.length)
+
+//     // Validate that we have at least one image
+//     if (images.length === 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "At least one image is required",
+//       })
+//     }
+
+//     // Validate that all color groups have images
+//     const colorGroupsInForm = new Set()
+//     images.forEach((img) => colorGroupsInForm.add(img.colorCode))
+
+//     console.log("[DEBUG] Available color codes in images:", Array.from(colorGroupsInForm))
+
+//     // Check if any color in variants doesn't have images
+//     if (productData.variants && productData.variants.length > 0) {
+//       console.log("[DEBUG] Validating variants against images...")
+//       for (const variant of productData.variants) {
+//         console.log("[DEBUG] Checking variant color:", variant.colorCode, variant.colorName)
+//         if (!colorGroupsInForm.has(variant.colorCode)) {
+//           return res.status(400).json({
+//             status: "error",
+//             message: `No images found for color: ${variant.colorName} (${variant.colorCode})`,
+//           })
+//         }
+//       }
+//     }
+
+//     // Create slug from title
+//     const slug = productData.title
+//       .toLowerCase()
+//       .replace(/[^a-z0-9]+/g, "-")
+//       .replace(/(^-|-$)/g, "")
+
+//     console.log("[DEBUG] Generated slug:", slug)
+
+//     let totalStock = 0
+//     const processedVariants = []
+
+//     if (productData.variants && productData.variants.length > 0) {
+//       console.log("[DEBUG] Processing variants:", productData.variants.length)
+
+//       for (let index = 0; index < productData.variants.length; index++) {
+//         const variant = productData.variants[index]
+//         console.log("[DEBUG] Processing variant", index, ":", variant)
+
+//         // Validate required fields
+//         if (!variant.colorCode || !variant.colorName || !variant.sizes || variant.sizes.length === 0) {
+//           console.log("[DEBUG] Invalid variant data:", variant)
+//           return res.status(400).json({
+//             status: "error",
+//             message: `Variant ${index + 1} is missing required fields (colorCode, colorName, or sizes)`,
+//           })
+//         }
+
+//         // Process sizes inside the variant
+//         variant.sizes.forEach((s) => {
+//           const variantData = {
+//             productCode: variant.productCode || generateProductCode(),
+//             colorCode: variant.colorCode,
+//             colorName: variant.colorName,
+//             size: s.size,
+//             dimension: s.dimension || "",
+//             stock: Number.parseInt(s.stock) || 0,
+//             // ✅ IMPORTANT: Add variant-specific pricing fields
+//             ...(variant.basePrice && { basePrice: Number.parseFloat(variant.basePrice) }),
+//             ...(variant.discountPercentage !== undefined && {
+//               discountPercentage: Number.parseFloat(variant.discountPercentage),
+//             }),
+//             ...(variant.discountStartTime && { discountStartTime: new Date(variant.discountStartTime) }),
+//             ...(variant.discountEndTime && { discountEndTime: new Date(variant.discountEndTime) }),
+//           }
+
+//           processedVariants.push(variantData)
+//           totalStock += Number.parseInt(s.stock) || 0
+//           console.log("[DEBUG] Added variant:", variantData)
+//         })
+//       }
+//     }
+
+//     console.log("[DEBUG] Total processed variants:", processedVariants.length)
+//     console.log("[DEBUG] Total stock calculated:", totalStock)
+
+//     // Validate that we have at least one variant if variants are provided
+//     if (productData.variants && productData.variants.length > 0 && processedVariants.length === 0) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "At least one valid variant is required",
+//       })
+//     }
+
+//     // ✅ CRITICAL FIX: Proper discount time handling
+//     const discountStartTime = productData.discountStartTime ? new Date(productData.discountStartTime) : undefined
+//     const discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : undefined
+
+//     // ✅ IMPORTANT: Validate discount times if discount is provided
+//     const discountPercentage = Number.parseFloat(productData.discountPercentage) || 0
+//     if (discountPercentage > 0) {
+//       if (!discountStartTime || !discountEndTime) {
+//         return res.status(400).json({
+//           status: "error",
+//           message: "Discount start time and end time are required when discount percentage is set",
+//         })
+//       }
+//       if (discountEndTime <= discountStartTime) {
+//         return res.status(400).json({
+//           status: "error",
+//           message: "Discount end time must be after start time",
+//         })
+//       }
+//     }
+
+//     // Create the product object
+//     const newProduct = new Product({
+//       title: productData.title,
+//       description: productData.description,
+//       brand: productData.brand,
+//       slug,
+//       bulletPoints: productData.bulletPoints?.filter((point) => point.trim() !== "") || [],
+//       parentCategoryId: productData.parentCategoryId,
+//       subCategoryId: productData.subCategoryId,
+//       dressTypeId: productData.dressTypeId,
+//       styleId: productData.styleId,
+//       basePrice: Number.parseFloat(productData.basePrice),
+//       // ✅ CRITICAL: Set discount fields properly
+//       discountPercentage: discountPercentage,
+//       discountStartTime: discountStartTime,
+//       discountEndTime: discountEndTime,
+//       images,
+//       variants: processedVariants,
+//       stock: totalStock,
+//       weight: productData.weight ? Number.parseFloat(productData.weight) : undefined,
+//       material: productData.material,
+//       pattern: productData.pattern,
+//       gender: productData.gender,
+//       isFeatured: productData.isFeatured || false,
+//       metaTitle: productData.metaTitle,
+//       metaDescription: productData.metaDescription,
+//       specifications:
+//         productData.specifications?.filter(
+//           (spec) => spec.key && spec.value && spec.key.trim() !== "" && spec.value.trim() !== "",
+//         ) || [],
+//       video: productData.video,
+//     })
+
+//     console.log("[DEBUG] Product object before save:", {
+//       basePrice: newProduct.basePrice,
+//       discountPercentage: newProduct.discountPercentage,
+//       discountStartTime: newProduct.discountStartTime,
+//       discountEndTime: newProduct.discountEndTime,
+//       variantsCount: newProduct.variants.length,
+//     })
+
+//     console.log("[DEBUG] About to save product...")
+
+//     // ✅ IMPORTANT: Save the product - this will trigger pre-save hooks for price calculation
+//     const savedProduct = await newProduct.save()
+
+//     console.log("[DEBUG] Product saved successfully with calculated prices:")
+//     console.log("[DEBUG] Main price:", savedProduct.price)
+//     console.log("[DEBUG] Variants with prices:", savedProduct.variants?.map((v) => ({
+//       colorName: v.colorName,
+//       size: v.size,
+//       basePrice: v.basePrice,
+//       price: v.price,
+//       discountPercentage: v.discountPercentage,
+//     })))
+
+//     // Populate the category references for the response
+//     await savedProduct.populate("parentCategoryId subCategoryId dressTypeId styleId")
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Product created successfully",
+//       data: {
+//         product: savedProduct,
+//       },
+//     })
+//   } catch (error) {
+//     console.error("[DEBUG] Error creating product:", error)
+
+//     // Handle duplicate key errors (like duplicate slug)
+//     if (error.code === 11000) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "A product with this title already exists",
+//       })
+//     }
+
+//     // Handle validation errors
+//     if (error.name === "ValidationError") {
+//       const errors = Object.values(error.errors).map((err) => err.message)
+//       return res.status(400).json({
+//         status: "error",
+//         message: "Validation failed",
+//         errors: errors,
+//       })
+//     }
+
+//     res.status(500).json({
+//       status: "error",
+//       message: "Internal server error",
+//       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+//     })
+//   }
+// }
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -435,217 +720,6 @@ export const getProduct = catchAsync(async (req, res, next) => {
     },
   })
 })
-
-// @desc    Update product
-// @route   PATCH /api/products/:id
-// @access  Private/Admin
-
-// export const updateProduct = catchAsync(async (req, res, next) => {
-//   console.log("=== UPDATE PRODUCT START ===")
-//   console.log("Product ID:", req.params.id)
-//   console.log("Files received:", req.files ? req.files.length : 0)
-
-//   try {
-//     // Parse JSON data
-//     let productData
-//     if (typeof req.body.productData === "string") {
-//       productData = JSON.parse(req.body.productData)
-//     } else {
-//       productData = req.body
-//     }
-
-//     console.log("Parsed product data:", {
-//       variantsCount: productData.variants ? productData.variants.length : 0,
-//       deleteImagesCount: productData.deleteImages ? productData.deleteImages.length : 0,
-//       basePrice: productData.basePrice,
-//       discountPercentage: productData.discountPercentage,
-//       discountStartTime: productData.discountStartTime,
-//       discountEndTime: productData.discountEndTime,
-//     })
-
-//     // Get existing product
-//     const existingProduct = await Product.findById(req.params.id)
-//     if (!existingProduct) {
-//       return res.status(404).json({
-//         status: "error",
-//         message: "Product not found",
-//       })
-//     }
-
-//     // Handle image deletions first
-//     if (productData.deleteImages && productData.deleteImages.length > 0) {
-//       console.log("Deleting images:", productData.deleteImages)
-//       for (const imageUrl of productData.deleteImages) {
-//         try {
-//           const publicId = getPublicIdFromUrl(imageUrl)
-//           await deleteImage(publicId)
-//           console.log("Deleted image:", imageUrl)
-//         } catch (error) {
-//           console.error("Error deleting image:", error)
-//         }
-//       }
-
-//       // Remove deleted images from existing product
-//       existingProduct.images = existingProduct.images.filter(
-//         (img) => !productData.deleteImages.includes(typeof img === "string" ? img : img.url),
-//       )
-//     }
-
-//     // Process new images and create proper image structure
-//     const processedImages = [...existingProduct.images] // Start with remaining existing images
-
-//     if (req.files && req.files.length > 0) {
-//       console.log("Processing", req.files.length, "new files")
-
-//       // Add new images with proper structure
-//       req.files.forEach((file, fileIndex) => {
-//         // ✅ CORRECTED: Frontend থেকে imageColorCode_0, imageColorName_0 format এ data আসে
-//         const colorCode = req.body[`imageColorCode_${fileIndex}`] || "#000000"
-//         const colorName = req.body[`imageColorName_${fileIndex}`] || "Default"
-
-//         processedImages.push({
-//           url: file.path,
-//           colorCode: colorCode,
-//           colorName: colorName,
-//         })
-
-//         console.log("Added new image with color:", colorCode, colorName)
-//       })
-//     }
-//     // Update the product images
-//     existingProduct.images = processedImages
-
-//     // ✅ CRITICAL: Update product-level pricing with time validation
-//     if (productData.basePrice !== undefined) {
-//       existingProduct.basePrice = Number.parseFloat(productData.basePrice)
-//     }
-
-//     // ✅ Update discount with proper time validation
-//     if (productData.discountPercentage !== undefined) {
-//       existingProduct.discountPercentage = Number.parseFloat(productData.discountPercentage) || 0
-
-//       // ✅ IMPORTANT: Set discount times - these are required for time validation
-//       if (existingProduct.discountPercentage > 0) {
-//         existingProduct.discountStartTime = productData.discountStartTime
-//           ? new Date(productData.discountStartTime)
-//           : new Date()
-//         existingProduct.discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : null
-//       } else {
-//         existingProduct.discountStartTime = null
-//         existingProduct.discountEndTime = null
-//       }
-//     }
-
-//     // ✅ Process variants with proper pricing logic
-//     if (productData.variants && Array.isArray(productData.variants)) {
-//       console.log("Processing variants:", productData.variants.length)
-
-//       const processedVariants = productData.variants.map((variant) => {
-//         const processedVariant = {
-//           _id: variant._id, // Keep existing ID for updates
-//           colorCode: variant.colorCode || "#000000",
-//           colorName: variant.colorName || "Default",
-//           size: variant.size || "",
-//           dimension: variant.dimension || "",
-//           stock: Number.parseInt(variant.stock) || 0,
-//           productCode: variant.productCode || generateProductCode(), // Use the declared function
-//         }
-
-//         // ✅ Handle variant-specific pricing with time validation
-//         if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-//           processedVariant.basePrice = Number.parseFloat(variant.basePrice)
-//         }
-
-//         // ✅ Handle variant-specific discount with time validation
-//         if (
-//           variant.discountPercentage !== undefined &&
-//           variant.discountPercentage !== null &&
-//           variant.discountPercentage !== ""
-//         ) {
-//           processedVariant.discountPercentage = Number.parseFloat(variant.discountPercentage)
-
-//           // ✅ Set variant discount times if variant has custom discount
-//           if (processedVariant.discountPercentage > 0) {
-//             processedVariant.discountStartTime = variant.discountStartTime
-//               ? new Date(variant.discountStartTime)
-//               : new Date()
-//             processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null
-//           }
-//         }
-
-//         return processedVariant
-//       })
-
-//       // Calculate total stock from variants
-//       const totalStock = processedVariants.reduce((sum, variant) => sum + (variant.stock || 0), 0)
-
-//       existingProduct.variants = processedVariants
-//       existingProduct.stock = totalStock
-
-//       console.log("Processed variants with pricing:", processedVariants.length)
-//     }
-
-//     // Update other fields (excluding price - it will be calculated by pre-save hook)
-//     const excludedFields = [
-//       "variants",
-//       "images",
-//       "deleteImages",
-//       "price",
-//       "discountPercentage",
-//       "discountStartTime",
-//       "discountEndTime",
-//     ]
-//     Object.keys(productData).forEach((key) => {
-//       if (productData[key] !== undefined && !excludedFields.includes(key)) {
-//         existingProduct[key] = productData[key]
-//       }
-//     })
-
-//     // ✅ IMPORTANT: Save the product - this will trigger pre-save hooks for automatic price calculation
-//     const updatedProduct = await existingProduct.save()
-
-//     await updatedProduct.populate([
-//       { path: "parentCategoryId", select: "name slug" },
-//       { path: "subCategoryId", select: "name slug" },
-//       { path: "dressTypeId", select: "name slug" },
-//       { path: "styleId", select: "name slug" },
-//     ])
-
-//     console.log("Product updated successfully with calculated prices:")
-//     console.log("Main price:", updatedProduct.price)
-//     console.log(
-//       "Variants with calculated prices:",
-//       updatedProduct.variants?.map((v) => ({
-//         colorName: v.colorName,
-//         size: v.size,
-//         basePrice: v.basePrice,
-//         price: v.price,
-//         discountPercentage: v.discountPercentage,
-//       })),
-//     )
-
-//     res.status(200).json({
-//       status: "success",
-//       data: {
-//         product: updatedProduct,
-//       },
-//     })
-//   } catch (error) {
-//     console.error("Error updating product:", error)
-//     res.status(500).json({
-//       status: "error",
-//       message: error.message || "Internal server error",
-//     })
-//   }
-// })
-
-
-
-// @desc    Update product
-// @route   PATCH /api/products/:id
-// @access  Private/Admin
-
-
 
 
 export const updateProduct = catchAsync(async (req, res, next) => {

@@ -4,7 +4,7 @@ import { protect, admin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// স্টক নোটিফিকেশন পাওয়ার জন্য (এডমিন Only)
+// for admin only get stock notification
 router.get("/", protect, admin, async (req, res) => {
   try {
     const { page = 1, limit = 10, unreadOnly = false } = req.query;
@@ -32,7 +32,7 @@ router.get("/", protect, admin, async (req, res) => {
   }
 });
 
-// নোটিফিকেশন মার্ক অ্যাজ রিড করার জন্য
+// for making mark as read
 router.patch("/:id/read", protect, admin, async (req, res) => {
   try {
     const notification = await StockNotification.findByIdAndUpdate(
@@ -51,17 +51,13 @@ router.patch("/:id/read", protect, admin, async (req, res) => {
   }
 });
 
-// সকল নোটিফিকেশন মার্ক অ্যাজ রিড করার জন্য
+// for making all notification mark as read
 router.patch("/read-all", protect, admin, async (req, res) => {
-  try {
-    await StockNotification.updateMany(
-      { isRead: false },
-      { isRead: true }
-    );
-    
-    res.json({ success: true, message: "All notifications marked as read" });
+  try {await StockNotification.updateMany({ isRead: false },
+  { isRead: true });
+  res.json({ success: true, message: "All notifications marked as read" });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+  res.status(500).json({ message: error.message });
   }
 });
 

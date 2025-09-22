@@ -22,7 +22,7 @@ function calculateShippingCost(subtotal, city) {
 
 async function calculateOrderAmount(userId, shippingAddress) {
   try {
-    // কার্ট আইটেমগুলো পপুলেট সহ লোড করুন
+    // Cart items populet for load data
     const cart = await Cart.findOne({ userId }).populate({
       path: "items.productId",
       model: "Product",
@@ -31,14 +31,11 @@ async function calculateOrderAmount(userId, shippingAddress) {
     if (!cart || !cart.items || cart.items.length === 0) {
       throw new Error("Cart is empty");
     }
-
-    // কার্টের সামগ্রিক মূল্য গণনা করুন
+    // calculate cart all itemss
     await cart.calculateTotals();
-
-    // শিপিং খরচ যোগ করুন
+    // adding shiping cost
     const shippingCost = calculateShippingCost(cart.finalAmount, shippingAddress.city);
     const finalTotal = cart.finalAmount + shippingCost;
-
     return {
       subtotal: cart.totalBaseAmount,
       discount: cart.totalDiscountAmount,
@@ -279,7 +276,6 @@ export const initializeGuestPayment = async (req, res) => {
     });
   }
 };
-
 
 // Cash on Delivery order 
 // (For log in user only. guest user COD manageing from order controller. 
@@ -526,7 +522,7 @@ export const createCODOrder = async (req, res) => {
   }
 }
 
-// Helper function to update product stock (same as in guest order)
+// Helper function to update product stock 
 const updateProductStock = async (orderItems) => {
   for (const item of orderItems) {
     const product = await Product.findById(item.productId)
@@ -551,7 +547,7 @@ const updateProductStock = async (orderItems) => {
   }
 }
 
-// Initialize online payment with SSLCommerz (existing - no changes needed)
+// Initialize online payment with SSLCommerz 
 // Initialize online payment with Aamarpay
 export const initializePayment = async (req, res) => {
   try {
@@ -1002,22 +998,18 @@ export const paymentSuccess = async (req, res) => {
   }
 };
 
-// Handle payment failure (existing - no changes needed)
+// Handle payment failure 
 export const paymentFail = async (req, res) => {
   try {
     console.log("=== Payment Fail Request ===")
     console.log("Request body:", JSON.stringify(req.body, null, 2))
 
     const { tran_id } = req.body
-
-    // Check if it's a guest order
     if (tran_id.startsWith("GUEST_TXN_")) {
-      // Clean up pending guest order data
       global.pendingGuestOrders = global.pendingGuestOrders || new Map()
       global.pendingGuestOrders.delete(tran_id)
       console.log("Cleaned up pending guest order data for:", tran_id)
     } else {
-      // Handle regular user order
       const order = await Order.findOne({ transactionId: tran_id })
       if (order) {
         order.paymentStatus = "failed"
@@ -1028,7 +1020,6 @@ export const paymentFail = async (req, res) => {
         console.log("Order not found for transaction ID:", tran_id)
       }
     }
-
     res.status(200).json({
       success: false,
       message: "Payment failed",
@@ -1039,7 +1030,7 @@ export const paymentFail = async (req, res) => {
   }
 }
 
-// Handle payment cancellation (existing - no changes needed)
+// Handle payment cancellation 
 export const paymentCancel = async (req, res) => {
   try {
     console.log("=== Payment Cancel Request ===")
@@ -1076,7 +1067,7 @@ export const paymentCancel = async (req, res) => {
   }
 }
 
-// IPN (Instant Payment Notification) handler (existing - no changes needed)
+// IPN (Instant Payment Notification) handler 
 export const handleIPN = async (req, res) => {
   try {
     console.log("=== IPN Request ===")
@@ -1436,20 +1427,3 @@ export const paymentNotify = async (req, res) => {
     res.status(500).send("Error");
   }
 };
-
-
-// export const paymentNotify = async (req, res) => {
-//   try {
-//     console.log("=== Payment Notify (IPN) Request ===");
-//     console.log("Request body:", JSON.stringify(req.body, null, 2));
-//     // This is the same logic as paymentSuccess POST handler
-//     await paymentSuccess(req, res);
-//   } catch (error) {
-//     console.error("Payment notify error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message
-//     });
-//   }
-// };

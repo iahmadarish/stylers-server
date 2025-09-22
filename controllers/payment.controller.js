@@ -13,7 +13,7 @@ const is_live = false // true for live, false for sandbox
 function calculateShippingCost(subtotal, city) {
   if (subtotal >= 4000) return 0
   const isDhaka = city && city.toLowerCase().includes("dhaka")
-  return isDhaka ? 3 : 2
+  return isDhaka ? 1 : 2
 }
 
 async function calculateOrderAmount(userId, shippingAddress) {
@@ -891,6 +891,7 @@ export const paymentNotify = async (req, res) => {
 
       if (!guestOrderData) {
         console.log("❌ Guest order data not found for transaction:", tran_id)
+        console.log("Available guest transactions:", Array.from(global.pendingGuestOrders.keys()))
         return res.status(404).send("FAILED - Guest order data not found")
       }
 

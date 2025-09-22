@@ -1423,7 +1423,7 @@ const is_live = false // true for live, false for sandbox
 function calculateShippingCost(subtotal, city) {
   if (subtotal >= 4000) return 0
   const isDhaka = city && city.toLowerCase().includes("dhaka")
-  return isDhaka ? 80 : 120
+  return isDhaka ? 2 : 15
 }
 
 async function calculateOrderAmount(userId, shippingAddress) {

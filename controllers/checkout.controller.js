@@ -349,7 +349,7 @@ function calculateShippingCost(subtotal) {
   if (subtotal >= 4000) {
     return 0 // Free shipping for orders above 2000 BDT
   } else if (subtotal >= 1000) {
-    return 50 // 50 BDT for orders above 1000 BDT
+    return 5 // 50 BDT for orders above 1000 BDT
   } else {
     return 100 // 100 BDT for orders below 1000 BDT
   }

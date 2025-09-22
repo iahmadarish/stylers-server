@@ -17,7 +17,7 @@ const is_live = false // true for live, false for sandbox
 function calculateShippingCost(subtotal, city) {
   if (subtotal >= 4000) return 0
   const isDhaka = city && city.toLowerCase().includes("dhaka")
-  return isDhaka ? 80 : 150
+  return isDhaka ? 5 : 15
 }
 
 async function calculateOrderAmount(userId, shippingAddress) {
@@ -727,10 +727,8 @@ export const paymentSuccess = async (req, res) => {
     console.log("Body:", req.body);
 
     // Get transaction ID from different sources
-   // also handle AamarPay's transaction_id field
-const bodyTranId = req.body?.tran_id || req.body?.transaction_id || req.body?.mer_txnid;
+    const bodyTranId = req.body?.tran_id || req.body?.transaction_id || req.body?.mer_txnid;
 const tran_id = req.params.transactionId || bodyTranId || req.query?.tran_id;
-
     const isGuest = req.query?.isGuest === "true" || (tran_id && tran_id.startsWith("GUEST_TXN_"));
 
     if (!tran_id) {

@@ -727,7 +727,10 @@ export const paymentSuccess = async (req, res) => {
     console.log("Body:", req.body);
 
     // Get transaction ID from different sources
-    const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
+   // also handle AamarPay's transaction_id field
+const bodyTranId = req.body?.tran_id || req.body?.transaction_id || req.body?.mer_txnid;
+const tran_id = req.params.transactionId || bodyTranId || req.query?.tran_id;
+
     const isGuest = req.query?.isGuest === "true" || (tran_id && tran_id.startsWith("GUEST_TXN_"));
 
     if (!tran_id) {
@@ -1168,8 +1171,8 @@ export const initializeAamarpayPayment = async (req, res) => {
         orderItems = amountDetails.cartItems;
       } catch (error) {
         return res.status(400).json({
-          success: false,
-          message: error.message || "Error calculating order amount"
+        success: false,
+        message: error.message || "Error calculating order amount"
         });
       }
     }
@@ -1195,19 +1198,6 @@ export const initializeAamarpayPayment = async (req, res) => {
     formData.append('cus_add1', shippingAddress.address.substring(0, 50));
     formData.append('cus_city', shippingAddress.city || "Dhaka");
     formData.append('cus_country', shippingAddress.country || "Bangladesh");
-
-    //    formData.append(
-    //   'success_url',
-    //   `${process.env.FRONTEND_URL}/payment-success/${tran_id}`
-    // );  // User browser redirect
-    //  formData.append(
-    //   'fail_url',
-    //   `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`
-    // );
-    // formData.append(
-    //   'cancel_url',
-    //   `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`
-    // );
 
     formData.append(
       -  'success_url',
@@ -1312,27 +1302,18 @@ export const initializeAamarpayPayment = async (req, res) => {
       cus_add1: shippingAddress.address.substring(0, 50),
       cus_city: shippingAddress.city || "Dhaka",
       cus_country: shippingAddress.country || "Bangladesh",
-      success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  // 👉 User redirect
+      success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,  //
       fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
       cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
-
-
-      // success_url: `${process.env.BACKEND_URL}/api/payment/success/${tran_id}`,
-      // fail_url: `${process.env.BACKEND_URL}/api/payment/fail/${tran_id}`,
-      // cancel_url: `${process.env.BACKEND_URL}/api/payment/cancel/${tran_id}`,
-
-      // Gateway callback  notify_url (server-side POST callback)
       notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: 'json'
     };
 
     console.log("Aamarpay request payload:", payload);
-
-    // Send request to Aamarpay - using form-urlencoded format
     try {
       const response = await axios.post(
         process.env.AMARPAY_PAYMENT_URL || "https://sandbox.aamarpay.com/jsonpost.php",
-        payload, // Send as JSON object directly
+        payload,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -1340,7 +1321,6 @@ export const initializeAamarpayPayment = async (req, res) => {
           timeout: 10000
         }
       );
-
       console.log("Aamarpay API response:", response.data);
 
       if (response.data && response.data.payment_url) {

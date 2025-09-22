@@ -70,126 +70,8 @@ function calculateGuestOrderAmount(guestOrderData) {
     throw error;
   }
 }
-// NEW: Initialize payment for guest orders
-// payment.controller.js - initializeGuestPayment function
-// payment.controller.js - initializeGuestPayment function
-// export const initializeGuestPayment = async (req, res) => {
-//   try {
-//     const { guestOrderData, customerInfo, orderInfo, paymentMethod } = req.body;
 
-//     console.log("=== Initialize Guest Payment Request ===");
-//     console.log("Guest Order Data:", JSON.stringify(guestOrderData, null, 2));
-//     console.log("Customer Info:", JSON.stringify(customerInfo, null, 2));
-
-//     // Calculate amounts
-//     const subtotal = guestOrderData.subtotal || guestOrderData.items.reduce((sum, item) =>
-//       sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1), 0);
-
-//     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city);
-//     const finalTotal = subtotal + shippingCost;
-//     const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-//     // Ensure guest order data has all required fields
-//     const completeGuestOrderData = {
-//       items: guestOrderData.items.map(item => ({
-//         productId: item.productId,
-//         productTitle: item.productTitle || "Unknown Product",
-//         productImage: item.productImage || "/placeholder.svg",
-//         variantId: item.variantId || null,
-//         colorVariantId: item.colorVariantId || null, // Keep as string, not ObjectId
-//         quantity: item.quantity || 1,
-//         originalPrice: item.originalPrice || 0,
-//         discountedPrice: item.discountedPrice || item.originalPrice || 0,
-//         discountPercentage: item.discountPercentage || 0,
-//         totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
-//         totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-//         discountAmount: ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
-//       })),
-//       subtotal: subtotal,
-//       totalDiscount: guestOrderData.totalDiscount || 0,
-//       shippingCost: shippingCost,
-//       totalAmount: finalTotal,
-//       shippingAddress: guestOrderData.shippingAddress,
-//       couponCode: guestOrderData.couponCode || null,
-//       specialInstructions: guestOrderData.specialInstructions || "",
-//       transactionId: tran_id,
-//       paymentStatus: "pending",
-//       customerInfo: customerInfo,
-//       paymentMethod: paymentMethod
-//     };
-
-//     // Aamarpay payment data preparation
-//     const store_id = process.env.AMARPAY_STORE_ID;
-//     const signature_key = process.env.AMARPAY_SIGNATURE_KEY;
-
-//     // Prepare payment data
-//     const paymentData = {
-//       store_id,
-//       signature_key,
-//       tran_id,
-//       amount: finalTotal.toFixed(2),
-//       currency: "BDT",
-//       desc: `Guest Order Payment`,
-//       cus_name: customerInfo.name,
-//       cus_email: customerInfo.email,
-//       cus_phone: customerInfo.phone,
-//       cus_add1: guestOrderData.shippingAddress.address.substring(0, 50),
-//       cus_city: guestOrderData.shippingAddress.city,
-//       cus_country: guestOrderData.shippingAddress.country || "Bangladesh",
-//       success_url: `${process.env.FRONTEND_URL}/payment/success/${tran_id}?isGuest=true`,
-//       fail_url: `${process.env.FRONTEND_URL}/payment/fail/${tran_id}?isGuest=true`,
-//       cancel_url: `${process.env.FRONTEND_URL}/payment/cancel/${tran_id}?isGuest=true`,
-//       notify_url: `${process.env.BACKEND_URL}/payment/notify`,
-//       type: 'json'
-//     };
-
-//     // Store guest order data temporarily
-//     global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-//     global.pendingGuestOrders.set(tran_id, completeGuestOrderData);
-
-//     console.log("Stored guest order data for transaction:", tran_id);
-
-//     // Send request to Aamarpay
-//     const response = await axios.post(
-//       process.env.AMARPAY_PAYMENT_URL,
-//       paymentData,
-//       {
-//         headers: {
-//           'Content-Type': 'application/json'
-//         }
-//       }
-//     );
-
-//     if (response.data && response.data.payment_url) {
-//       res.status(200).json({
-//         success: true,
-//         message: "Payment initialized successfully",
-//         data: {
-//           payment_url: response.data.payment_url,
-//           transactionId: tran_id,
-//         },
-//       });
-//     } else {
-//       // Clean up if failed
-//       global.pendingGuestOrders.delete(tran_id);
-
-//       res.status(400).json({
-//         success: false,
-//         message: response.data.msg || "Payment initialization failed",
-//       });
-//     }
-//   } catch (error) {
-//     console.error("Error initializing guest payment:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message
-//     });
-//   }
-// };
-
-
-// COMPLETE: Initialize payment for guest orders
+//  Initialize payment for guest orders
 export const initializeGuestPayment = async (req, res) => {
   try {
     console.log("=== Initialize Guest Payment Request ===");
@@ -397,10 +279,6 @@ export const initializeGuestPayment = async (req, res) => {
     });
   }
 };
-
-
-
-
 
 
 // Cash on Delivery order 
@@ -843,9 +721,6 @@ export const initializePayment = async (req, res) => {
   }
 }
 
-
-
-
 // COMPLETE FIXED: Payment Success Handler
 export const paymentSuccess = async (req, res) => {
   try {
@@ -1123,536 +998,6 @@ export const paymentSuccess = async (req, res) => {
       success: false,
       message: "Internal server error",
       error: error.message,
-    });
-  }
-};
-
-
-// UPDATED: Handle payment success - now handles both user and guest orders
-// UPDATED: Handle payment success - now handles both user and guest orders
-// UPDATED: Handle payment success - Fixed version
-// CORRECTED: Handle payment success without separate verification API
-// UPDATED: Handle payment success - Fixed version
-// export const paymentSuccess = async (req, res) => {
-//   try {
-//     console.log("=== Payment Success Request ===");
-//     console.log("Method:", req.method);
-//     console.log("Params:", req.params);
-//     console.log("Query:", req.query);
-//     console.log("Body:", req.body);
-
-
-//     console.log("POST request received - This is Aamarpay server callback");
-//     console.log("Callback data:", req.body);
-
-
-//     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-
-//     if (!tran_id) {
-//       if (req.method === "GET") {
-//         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
-//       }
-//       return res.status(400).json({
-//         success: false,
-//         message: "Transaction ID missing",
-//       });
-//     }
-
-//     // যদি GET request হয় 👉 শুধু frontend-এ redirect করবে
-//     if (req.method === "GET") {
-//       console.log("GET request received for payment success, redirecting to frontend");
-
-//       // Check if it's a guest order
-//       if (tran_id.startsWith("GUEST_TXN_")) {
-//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
-//       } else {
-//         const order = await Order.findOne({ transactionId: tran_id });
-//         if (order) {
-//           return res.redirect(`${process.env.FRONTEND_URL}/order-success/${order._id}`);
-//         } else {
-//           return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=order_not_found`);
-//         }
-//       }
-//     }
-
-//     // যদি POST request হয় 👉 এটি Aamarpay থেকে server callback (IPN)
-//     console.log("POST request received - This is Aamarpay server callback");
-//     console.log("Callback data:", req.body);
-
-//     // Aamarpay callback data validation
-//     const callbackData = req.body;
-
-//     // Check if payment was successful
-//     const isPaymentSuccessful = callbackData.pay_status === "Successful";
-
-//     if (!isPaymentSuccessful) {
-//       console.log("Payment was not successful:", callbackData.pay_status);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Payment was not successful",
-//         paymentStatus: callbackData.pay_status
-//       });
-//     }
-
-//     // Verify store credentials match (security check)
-//     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-//       console.log("Store ID mismatch. Expected:", process.env.AMARPAY_STORE_ID, "Received:", callbackData.store_id);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Store ID verification failed"
-//       });
-//     }
-
-//     console.log("Payment verification successful via callback");
-
-//     // গেস্ট অর্ডার কিনা চেক করো
-//     if (tran_id.startsWith("GUEST_TXN_")) {
-//       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-//       const guestOrderData = global.pendingGuestOrders.get(tran_id);
-
-//       if (!guestOrderData) {
-//         console.log("Guest order data not found for:", tran_id);
-//         return res.status(404).json({
-//           success: false,
-//           message: "Guest order data not found"
-//         });
-//       }
-
-//       // Create guest order
-//       const orderCount = await Order.countDocuments();
-//       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
-
-//       // Ensure all required fields are present
-//       const orderItems = guestOrderData.items.map(item => ({
-//         productId: item.productId,
-//         productTitle: item.productTitle || "Unknown Product",
-//         productImage: item.productImage || "/placeholder.svg",
-//         variantId: item.variantId || null,
-//         colorVariantId: item.colorVariantId || null,
-//         quantity: item.quantity || 1,
-//         originalPrice: item.originalPrice || 0,
-//         discountedPrice: item.discountedPrice || item.originalPrice || 0,
-//         discountPercentage: item.discountPercentage || 0,
-//         totalOriginalPrice: item.totalOriginalPrice || (item.originalPrice || 0) * (item.quantity || 1),
-//         totalDiscountedPrice: item.totalDiscountedPrice || (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-//         discountAmount: item.discountAmount || ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1)
-//       }));
-
-//       const subtotal = guestOrderData.subtotal || orderItems.reduce((sum, item) => sum + item.totalDiscountedPrice, 0);
-
-//       const order = new Order({
-//         isGuestOrder: true,
-//         guestCustomerInfo: {
-//           name: guestOrderData.shippingAddress.fullName,
-//           email: guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email || "",
-//           phone: guestOrderData.shippingAddress.phone || guestOrderData.customerInfo?.phone,
-//         },
-//         orderNumber,
-//         items: orderItems,
-//         subtotal: subtotal,
-//         totalDiscount: guestOrderData.totalDiscount || 0,
-//         shippingCost: guestOrderData.shippingCost,
-//         tax: 0,
-//         totalAmount: guestOrderData.totalAmount,
-//         shippingAddress: guestOrderData.shippingAddress,
-//         paymentMethod: "card",
-//         couponCode: guestOrderData.couponCode || null,
-//         couponDiscount: 0,
-//         specialInstructions: guestOrderData.specialInstructions || "",
-//         status: "confirmed", // ✅ স্ট্যাটাস confirmed সেট করা
-//         paymentStatus: "paid", // ✅ পেমেন্ট স্ট্যাটাস paid সেট করা
-//         transactionId: tran_id,
-//         paymentGatewayResponse: {
-//           pg_txnid: callbackData.pg_txnid,
-//           bank_txn: callbackData.bank_txn,
-//           card_type: callbackData.card_type,
-//           pay_time: callbackData.pay_time,
-//           amount: callbackData.amount,
-//           store_amount: callbackData.store_amount,
-//           currency: callbackData.currency
-//         }
-//       });
-
-//       await order.save();
-
-//       // Update product stock
-//       try {
-//         await updateProductStock(orderItems);
-//         console.log("Product stock updated for guest order");
-//       } catch (stockError) {
-//         console.error("Error updating product stock:", stockError);
-//       }
-
-//       // Clean up
-//       global.pendingGuestOrders.delete(tran_id);
-//       console.log("Guest order created successfully:", order.orderNumber);
-
-//       // Send confirmation email
-//       try {
-//         const toEmail = guestOrderData.shippingAddress.email || guestOrderData.customerInfo?.email;
-//         if (toEmail) {
-//           await sendOrderEmails(order, toEmail);
-//           console.log("✅ Guest order confirmation email sent");
-//         }
-//       } catch (mailError) {
-//         console.error("❌ Failed to send guest confirmation email:", mailError);
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         message: "Guest order payment successful",
-//         data: {
-//           order: {
-//             _id: order._id,
-//             orderNumber: order.orderNumber,
-//             totalAmount: order.totalAmount,
-//             status: order.status,
-//             paymentStatus: order.paymentStatus,
-//           },
-//         },
-//       });
-//     } else {
-//       // Regular order processing
-//       const order = await Order.findOne({ transactionId: tran_id });
-//       if (!order) {
-//         console.log("Order not found for transaction ID:", tran_id);
-//         return res.status(404).json({
-//           success: false,
-//           message: "Order not found"
-//         });
-//       }
-
-//       // ✅ স্ট্যাটাস এবং পেমেন্ট স্ট্যাটাস আপডেট করুন
-//       order.paymentStatus = "paid";
-//       order.status = "confirmed";
-
-//       // Store payment gateway response
-//       order.paymentGatewayResponse = {
-//         pg_txnid: callbackData.pg_txnid,
-//         bank_txn: callbackData.bank_txn,
-//         card_type: callbackData.card_type,
-//         pay_time: callbackData.pay_time,
-//         amount: callbackData.amount,
-//         store_amount: callbackData.store_amount,
-//         currency: callbackData.currency
-//       };
-
-//       await order.save();
-
-//       // Update product stock
-//       try {
-//         await updateProductStock(order.items);
-//         console.log("Product stock updated for regular order");
-//       } catch (stockError) {
-//         console.error("Error updating product stock:", stockError);
-//       }
-
-//       // Clear user's cart
-//       try {
-//         await Cart.findOneAndUpdate(
-//           { userId: order.userId },
-//           {
-//             $set: {
-//               items: [],
-//               totalBaseAmount: 0,
-//               totalDiscountAmount: 0,
-//               finalAmount: 0,
-//               itemCount: 0,
-//             },
-//           }
-//         );
-//         console.log("Cart cleared for user:", order.userId);
-//       } catch (cartError) {
-//         console.error("Error clearing cart:", cartError);
-//       }
-
-//       console.log("Order payment confirmed successfully:", order.orderNumber);
-
-//       // Send confirmation email
-//       try {
-//         const user = await User.findById(order.userId);
-//         const toEmail = order?.shippingAddress?.email || user?.email;
-//         if (toEmail) {
-//           await sendOrderEmails(order, toEmail);
-//           console.log("✅ Order confirmation email sent");
-//         }
-//       } catch (mailError) {
-//         console.error("❌ Failed to send confirmation email:", mailError);
-//       }
-
-//       return res.status(200).json({
-//         success: true,
-//         message: "Payment successful",
-//         data: {
-//           order: {
-//             _id: order._id,
-//             orderNumber: order.orderNumber,
-//             totalAmount: order.totalAmount,
-//             status: order.status,
-//             paymentStatus: order.paymentStatus,
-//           },
-//         },
-//       });
-//     }
-
-//   } catch (error) {
-//     console.error("Payment success handler error:", error);
-
-//     if (req.method === "GET") {
-//       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
-//     }
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
-
-
-
-
-// export const paymentSuccess = async (req, res) => {
-//   try {
-//     console.log("=== Payment Success Handler ===");
-//     console.log("Method:", req.method);
-//     console.log("Params:", req.params);
-//     console.log("Body:", req.body);
-//     console.log("Query:", req.query);
-
-//     const tran_id = req.params.transactionId || req.body?.tran_id || req.query?.tran_id;
-
-//     if (!tran_id) {
-//       console.log("Transaction ID missing");
-//       if (req.method === "GET") {
-//         return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=missing_transaction_id`);
-//       }
-//       return res.status(400).json({
-//         success: false,
-//         message: "Transaction ID missing",
-//       });
-//     }
-
-//     // Handle GET request (user redirect)
-//     if (req.method === "GET") {
-//       console.log("GET request - redirecting user to frontend");
-      
-//       if (tran_id.startsWith("GUEST_TXN_")) {
-//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}&isGuest=true`);
-//       } else {
-//         return res.redirect(`${process.env.FRONTEND_URL}/order-success?transactionId=${tran_id}`);
-//       }
-//     }
-
-//     console.log("POST request - Processing payment callback from Aamarpay");
-//     const callbackData = req.body;
-
-//     // Verify payment was successful
-//     if (callbackData.pay_status !== "Successful") {
-//       console.log("Payment not successful:", callbackData.pay_status);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Payment was not successful",
-//         paymentStatus: callbackData.pay_status
-//       });
-//     }
-
-//     // Verify store ID
-//     if (callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
-//       console.log("Store ID mismatch");
-//       return res.status(400).json({
-//         success: false,
-//         message: "Store ID verification failed"
-//       });
-//     }
-
-//     console.log("Payment verification successful");
-
-//     // Handle guest orders
-//     if (tran_id.startsWith("GUEST_TXN_")) {
-//       console.log("Processing guest order payment");
-//       global.pendingGuestOrders = global.pendingGuestOrders || new Map();
-//       const guestOrderData = global.pendingGuestOrders.get(tran_id);
-      
-//       if (!guestOrderData) {
-//         console.log("Guest order data not found");
-//         return res.status(404).json({
-//           success: false,
-//           message: "Guest order data not found"
-//         });
-//       }
-      
-//       const orderCount = await Order.countDocuments();
-//       const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`;
-
-//       const order = new Order({
-//         isGuestOrder: true,
-//         guestCustomerInfo: {
-//           name: guestOrderData.customerInfo?.name || guestOrderData.shippingAddress.fullName,
-//           email: guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email,
-//           phone: guestOrderData.customerInfo?.phone || guestOrderData.shippingAddress.phone,
-//         },
-//         orderNumber,
-//         transactionId: tran_id,
-//         items: guestOrderData.items,
-//         subtotal: guestOrderData.subtotal,
-//         totalDiscount: guestOrderData.totalDiscount || 0,
-//         shippingCost: guestOrderData.shippingCost,
-//         tax: 0,
-//         totalAmount: guestOrderData.totalAmount,
-//         shippingAddress: guestOrderData.shippingAddress,
-//         billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-//         paymentMethod: "card",
-//         specialInstructions: guestOrderData.specialInstructions || "",
-//         status: "confirmed", // ✅ Set status to confirmed
-//         paymentStatus: "paid", // ✅ Set payment status to paid
-//         paymentGatewayResponse: {
-//           pg_txnid: callbackData.pg_txnid,
-//           bank_txn: callbackData.bank_txn,
-//           card_type: callbackData.card_type,
-//           pay_time: callbackData.pay_time,
-//           amount: callbackData.amount,
-//           store_amount: callbackData.store_amount,
-//           currency: callbackData.currency
-//         }
-//       });
-
-//       await order.save();
-//       console.log("Guest order created successfully:", order.orderNumber);
-
-//       // Update product stock
-//       if (guestOrderData.items && guestOrderData.items.length > 0) {
-//         await updateProductStock(guestOrderData.items);
-//         console.log("Product stock updated");
-//       }
-      
-//       // Clean up pending data
-//       global.pendingGuestOrders.delete(tran_id);
-      
-//       // Send email
-//       try {
-//         const toEmail = guestOrderData.customerInfo?.email || guestOrderData.shippingAddress.email;
-//         if (toEmail) {
-//           await sendOrderEmails(order, toEmail);
-//           console.log("Guest confirmation email sent");
-//         }
-//       } catch (emailError) {
-//         console.error("Email sending failed:", emailError.message);
-//       }
-      
-//       return res.status(200).json({
-//         success: true,
-//         message: "Guest order payment successful",
-//         data: { orderId: order._id, orderNumber: order.orderNumber }
-//       });
-//     }
-
-//     // Handle regular user orders
-//     console.log("Processing regular user order payment");
-//     const order = await Order.findOne({ transactionId: tran_id });
-    
-//     if (!order) {
-//       console.log("Order not found for transaction ID:", tran_id);
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
-
-//     // ✅ Update paymentStatus and status for regular orders
-//     order.status = "confirmed";
-//     order.paymentStatus = "paid";
-    
-//     // Store gateway response
-//     order.paymentGatewayResponse = {
-//       pg_txnid: callbackData.pg_txnid,
-//       bank_txn: callbackData.bank_txn,
-//       card_type: callbackData.card_type,
-//       pay_time: callbackData.pay_time,
-//       amount: callbackData.amount,
-//       store_amount: callbackData.store_amount,
-//       currency: callbackData.currency
-//     };
-    
-//     await order.save();
-//     console.log("Order payment confirmed:", order.orderNumber);
-    
-//     // Update product stock
-//     if (order.items && order.items.length > 0) {
-//       await updateProductStock(order.items);
-//       console.log("Product stock updated");
-//     }
-    
-//     // Clear user's cart
-//     if (order.userId) {
-//       try {
-//         await Cart.findOneAndUpdate(
-//           { userId: order.userId },
-//           {
-//             $set: {
-//               items: [],
-//               totalBaseAmount: 0,
-//               totalDiscountAmount: 0,
-//               finalAmount: 0,
-//               itemCount: 0,
-//             },
-//           }
-//         );
-//         console.log("Cart cleared for user");
-//       } catch (cartError) {
-//         console.error("Error clearing cart:", cartError.message);
-//       }
-//     }
-    
-//     // Send confirmation email
-//     try {
-//       const user = order.userId ? await User.findById(order.userId) : null;
-//       const toEmail = order?.shippingAddress?.email || user?.email;
-//       if (toEmail) {
-//         await sendOrderEmails(order, toEmail);
-//         console.log("Order confirmation email sent");
-//       }
-//     } catch (emailError) {
-//       console.error("Email sending failed:", emailError.message);
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Payment successful",
-//       data: { orderId: order._id, orderNumber: order.orderNumber }
-//     });
-//   } catch (error) {
-//     console.error("Payment success handler error:", error);
-//     if (req.method === "GET") {
-//       return res.redirect(`${process.env.FRONTEND_URL}/payment-failed?error=server_error`);
-//     }
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
-
-
-
-export const paymentNotify = async (req, res) => {
-  try {
-    console.log("=== Payment Notify (IPN) Request ===");
-    console.log("Request body:", JSON.stringify(req.body, null, 2));
-    // This is the same logic as paymentSuccess POST handler
-    await paymentSuccess(req, res);
-  } catch (error) {
-    console.error("Payment notify error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message
     });
   }
 };
@@ -2046,123 +1391,65 @@ export const initializeAamarpayPayment = async (req, res) => {
   }
 }
 
-// Verify Aamarpay payment
-// export const verifyAamarpayPayment = async (req, res) => {
+async function verifyAamarpayPayment(transactionId) {
+  try {
+    const response = await axios.post("https://secure.aamarpay.com/json_checktx.php", {
+      store_id,
+      signature_key,
+      tran_id: transactionId
+    });
+    const data = response.data;
+    if (data.result === 'successful' || data.result === 'success') {
+      return { status: "success", data };
+    } else {
+      return { status: "failed", data };
+    }
+  } catch (error) {
+    console.error("Error verifying payment with Aamarpay:", error);
+    return { status: "error", error };
+  }
+}
+
+export const paymentNotify = async (req, res) => {
+  const { tran_id, pay_status } = req.body;
+  console.log("Received IPN notify request:", req.body);
+  
+  try {
+    const verification = await verifyAamarpayPayment(tran_id);
+    if (verification.status === "success" && pay_status === "Successful") {
+      const order = await Order.findOne({ transactionId: tran_id });
+      if (order && order.paymentStatus === "pending") {
+        order.status = "confirmed";
+        order.paymentStatus = "paid";
+        await order.save();
+        console.log(`Order updated from IPN for transaction ID: ${tran_id}`);
+        await Cart.findOneAndUpdate({ userId: order.userId }, { $set: { items: [], totalAmount: 0, totalDiscountAmount: 0, finalAmount: 0 } });
+        sendOrderEmails(order);
+      }
+      res.status(200).send("OK");
+    } else {
+      console.error("IPN notification failed verification or status is not successful for transaction ID:", tran_id);
+      res.status(400).send("Verification failed");
+    }
+  } catch (error) {
+    console.error("Error in paymentNotify handler:", error);
+    res.status(500).send("Error");
+  }
+};
+
+
+// export const paymentNotify = async (req, res) => {
 //   try {
-//     const { tran_id } = req.body
-
-//     // Create the data for verification
-//     const verificationData = {
-//       store_id: process.env.AMARPAY_STORE_ID,
-//       signature_key: process.env.AMARPAY_SIGNATURE_KEY,
-//       request_id: tran_id, // এখানে transaction ID যাবে
-//       type: "json",
-//     };
-
-//     // Send the verification request
-//     const verifyResponse = await axios.post(
-//       process.env.AMARPAY_VERIFICATION_URL,
-//       qs.stringify(verificationData),  // 🔥 convert to x-www-form-urlencoded
-//       {
-//         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-//       }
-//     );
-
-//     console.log("Aamarpay verification response:", verifyResponse.data);
-
-
-
-//     if (verifyResponse.data && verifyResponse.data.pay_status === "Successful") {
-//       // Check if it's a guest order
-//       if (tran_id.startsWith("GUEST_TXN_")) {
-//         // Handle guest order payment success
-//         global.pendingGuestOrders = global.pendingGuestOrders || new Map()
-//         const guestOrderData = global.pendingGuestOrders.get(tran_id)
-
-//         if (!guestOrderData) {
-//           console.log("Guest order data not found for transaction ID:", tran_id)
-//           return res.status(404).json({ message: "Order data not found" })
-//         }
-
-//         // Import and use the guest order creation function
-//         const { createGuestOrder } = await import("./order.controller.js")
-
-//         // Create guest order
-//         const mockReq = {
-//           body: {
-//             ...guestOrderData,
-//             paymentStatus: "paid",
-//             status: "confirmed",
-//           },
-//         }
-//         const mockRes = {
-//           status: (code) => ({
-//             json: (data) => {
-//               if (code === 201) {
-//                 // Clean up pending order data
-//                 global.pendingGuestOrders.delete(tran_id)
-//               }
-//               return { statusCode: code, data }
-//             },
-//           }),
-//         }
-
-//         await createGuestOrder(mockReq, mockRes)
-
-//         return res.status(200).json({
-//           success: true,
-//           message: "Payment successful",
-//         })
-//       } else {
-//         // Handle regular user order payment success
-//         const order = await Order.findOne({ transactionId: tran_id })
-//         if (!order) {
-//           console.log("Order not found for transaction ID:", tran_id)
-//           return res.status(404).json({ message: "Order not found" })
-//         }
-
-//         // Update order status
-//         order.paymentStatus = "paid"
-//         order.status = "confirmed"
-//         await order.save()
-
-//         // Clear user's cart
-//         try {
-//           await Cart.findOneAndUpdate(
-//             { userId: order.userId },
-//             { $set: { items: [], totalAmount: 0, totalDiscountAmount: 0, finalAmount: 0 } }
-//           )
-//           console.log("Cart cleared for user:", order.userId)
-//         } catch (cartError) {
-//           console.error("Error clearing cart:", cartError)
-//         }
-
-//         return res.status(200).json({
-//           success: true,
-//           message: "Payment successful",
-//           data: {
-//             order: {
-//               _id: order._id,
-//               orderNumber: order.orderNumber,
-//               totalAmount: order.totalAmount,
-//               status: order.status,
-//               paymentStatus: order.paymentStatus,
-//             },
-//           },
-//         })
-//       }
-//     } else {
-//       // Payment verification failed
-//       return res.status(400).json({
-//         success: false,
-//         message: "Payment verification failed",
-//       })
-//     }
+//     console.log("=== Payment Notify (IPN) Request ===");
+//     console.log("Request body:", JSON.stringify(req.body, null, 2));
+//     // This is the same logic as paymentSuccess POST handler
+//     await paymentSuccess(req, res);
 //   } catch (error) {
-//     console.error("Aamarpay verification error:", error)
-//     return res.status(500).json({
-//       message: "Payment verification error",
-//       error: error.message,
-//     })
+//     console.error("Payment notify error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message
+//     });
 //   }
-// }
+// };

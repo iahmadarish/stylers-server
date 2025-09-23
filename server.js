@@ -110,6 +110,14 @@ app.use(
   }),
 )
 
+
+app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+        return res.redirect(`https://${req.hostname}${req.url}`);
+    }
+    next();
+});
+
 // Passport middleware
 app.use(passport.initialize())
 app.use(passport.session())
@@ -129,24 +137,24 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-// cron.schedule('*/10 * * * *', async () => {
-//   try {
-//     console.log('[CRON] Running discount status check...');
-//     await Product.updateDiscountPrices();
-//   } catch (error) {
-//     console.error('[CRON] Error in discount update:', error);
-//   }
-// });
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    console.log('[CRON] Running discount status check...');
+    await Product.updateDiscountPrices();
+  } catch (error) {
+    console.error('[CRON] Error in discount update:', error);
+  }
+});
 
 // Checking server start up onces the server start
-// setTimeout(async () => {
-//   try {
-//     console.log('[STARTUP] Running initial discount status check...');
-//     await Product.updateDiscountPrices();
-//   } catch (error) {
-//     console.error('[STARTUP] Error in discount update:', error);
-//   }
-// }, 5000);
+setTimeout(async () => {
+  try {
+    console.log('[STARTUP] Running initial discount status check...');
+    await Product.updateDiscountPrices();
+  } catch (error) {
+    console.error('[STARTUP] Error in discount update:', error);
+  }
+}, 5000);
 
 
 // Routes

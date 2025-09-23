@@ -129,24 +129,24 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-cron.schedule('*/10 * * * *', async () => {
-  try {
-    console.log('[CRON] Running discount status check...');
-    await Product.updateDiscountPrices();
-  } catch (error) {
-    console.error('[CRON] Error in discount update:', error);
-  }
-});
+// cron.schedule('*/10 * * * *', async () => {
+//   try {
+//     console.log('[CRON] Running discount status check...');
+//     await Product.updateDiscountPrices();
+//   } catch (error) {
+//     console.error('[CRON] Error in discount update:', error);
+//   }
+// });
 
 // Checking server start up onces the server start
-setTimeout(async () => {
-  try {
-    console.log('[STARTUP] Running initial discount status check...');
-    await Product.updateDiscountPrices();
-  } catch (error) {
-    console.error('[STARTUP] Error in discount update:', error);
-  }
-}, 5000);
+// setTimeout(async () => {
+//   try {
+//     console.log('[STARTUP] Running initial discount status check...');
+//     await Product.updateDiscountPrices();
+//   } catch (error) {
+//     console.error('[STARTUP] Error in discount update:', error);
+//   }
+// }, 5000);
 
 
 // Routes
@@ -208,11 +208,11 @@ app.use(errorHandler)
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
-    console.log("✅ Connected to MongoDB")
+    console.log("Connected to MongoDB")
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`)
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`)
-      console.log(`🔗 Health check: http://localhost:${PORT}`)
+      console.log(`Server running on port ${PORT}`)
+      console.log(`Environment: ${process.env.NODE_ENV || "development"}`)
+      console.log(` Health check: http://localhost:${PORT}`)
     })
   })
   .catch((error) => {

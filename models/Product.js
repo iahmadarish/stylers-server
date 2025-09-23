@@ -683,13 +683,13 @@ productSchema.pre("validate", function (next) {
   next()
 })
 
-// updateDiscountPrices method replace
+// updateDiscountPrices method by cron and checking each product found if discount has true
 productSchema.statics.updateDiscountPrices = async function () {
   const nowUTC = new Date();
   console.log(`[CRON] Running discount update at UTC: ${nowUTC.toISOString()}`);
 
   try {
-    // ✅ pull all products which is have discount
+    //pull all products which is have discount
     const products = await this.find({
       $or: [
         { discountPercentage: { $gt: 0 } },
@@ -704,7 +704,7 @@ productSchema.statics.updateDiscountPrices = async function () {
     for (const product of products) {
       let needsUpdate = false;
 
-      // ✅ checking main products
+      //checking main products
       const isMainDiscountActive = product.discountPercentage > 0 &&
         product.discountStartTime &&
         product.discountEndTime &&
@@ -718,7 +718,7 @@ productSchema.statics.updateDiscountPrices = async function () {
       console.log(`[DEBUG] Now: ${nowUTC.toISOString()}`);
       console.log(`[DEBUG] Is active: ${isMainDiscountActive}`);
 
-      // ✅ logic for price calculation
+      //logic for price calculation
       const shouldHaveDiscountedPrice = isMainDiscountActive;
       const currentlyHasDiscountedPrice = product.price !== product.basePrice;
 
@@ -750,7 +750,7 @@ productSchema.statics.updateDiscountPrices = async function () {
           let shouldHaveVariantDiscount = false;
           let effectiveDiscount = 0;
 
-          // ✅ Determine base price: if variant has basePrice, use it; otherwise use product basePrice
+          //Determine base price: if variant has basePrice, use it; otherwise use product basePrice
           const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : product.basePrice;
 
           // 1. If variant has EXPLICIT discount → use variant discount
@@ -795,7 +795,7 @@ productSchema.statics.updateDiscountPrices = async function () {
       }
 
       if (needsUpdate) {
-        // ✅ IMPORTANT: pre-save hook skip direct update 
+        // IMPORTANT: pre-save hook skip direct update 
         await this.updateOne(
           { _id: product._id },
           {

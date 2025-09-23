@@ -25,7 +25,7 @@ import paymentRoutes from "./routes/payment.routes.js"
 import checkoutRoutes from "./routes/checkout.routes.js"
 import reviewRoutes from "./routes/review.routes.js"
 import stockNotificationRoutes from "./routes/stockNotifications.js"
-import stockReportRoutes from "./routes/stockNotifications.js"
+import stockReportRoutes from "./routes/stockReports.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
 
@@ -90,8 +90,8 @@ const corsOptions = {
 };
 
 // Enable pre-flight requests for all routes
-app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Pre-flight requests
 

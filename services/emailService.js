@@ -48,7 +48,6 @@ export const sendOrderConfirmationEmail = async (orderData) => {
         <meta charset="utf-8">
         <title>Order Confirmation</title>
         <style>
-          /* আপনার existing CSS styles */
         </style>
       </head>
       <body>
@@ -353,7 +352,7 @@ export const generateOrderConfirmationEmail = (order, isGuest = false) => {
       <div class="header">
         <div class="header-content">
           <img src="https://paarel.com/assets/01-B-KQiC7Y.png" alt="Paarel Logo" class="logo" />
-          <h1 class="order-confirmed">Order Confirmed!</h1>
+          <h1 class="order-confirmed">PAAREL - Order Confirmation</h1>
           <div class="order-number">Order #${orderNumber}</div>
           <p>Thank you for shopping with us</p>
         </div>
@@ -362,7 +361,7 @@ export const generateOrderConfirmationEmail = (order, isGuest = false) => {
       <!-- Content -->
       <div class="content">
         <h2 class="greeting">Hello ${customerName},</h2>
-        <p>Your order has been successfully placed and is being processed. You'll receive a notification when your order ships.</p>
+        <p>Your order has been successfully placed and is being processed.</p>
         
         <!-- Order Details -->
         <div class="info-card">

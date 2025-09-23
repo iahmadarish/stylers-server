@@ -129,7 +129,7 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-cron.schedule('* * * * *', async () => {
+cron.schedule('*/10 * * * *', async () => {
   try {
     console.log('[CRON] Running discount status check...');
     await Product.updateDiscountPrices();

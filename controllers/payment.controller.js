@@ -164,12 +164,18 @@ export const initializeGuestPayment = async (req, res) => {
 
     // Prepare complete guest order data for storage
     const completeGuestOrderData = {
-      items: guestOrderData.items.map((item) => ({
+    items: guestOrderData.items.map((item) => {
+      // ✅ সঠিক পদ্ধতি: নিশ্চিত করুন যে colorVariantId একটি বৈধ ObjectId
+      // যেহেতু আপনার ফ্রন্টএন্ডে সম্ভবত colorVariantId একটি MongoDB ObjectId হিসেবেই আছে,
+      // তাই এখানে সরাসরি তা ব্যবহার করুন।
+      const colorVariantId = item.colorVariantId ? item.colorVariantId : null;
+
+      return {
         productId: item.productId,
         productTitle: item.productTitle || "Unknown Product",
         productImage: item.productImage || "/placeholder.svg",
         variantId: item.variantId || null,
-        colorVariantId: item.colorVariantId || null,
+        colorVariantId: colorVariantId,
         quantity: item.quantity || 1,
         originalPrice: item.originalPrice || 0,
         discountedPrice: item.discountedPrice || item.originalPrice || 0,
@@ -178,29 +184,30 @@ export const initializeGuestPayment = async (req, res) => {
         totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
         discountAmount:
           ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1),
-      })),
-      subtotal: subtotal,
-      totalDiscount: guestOrderData.totalDiscount || 0,
-      shippingCost: shippingCost,
-      totalAmount: finalTotal,
-      shippingAddress: {
-        fullName: guestOrderData.shippingAddress.fullName || customerInfo.name,
-        phone: guestOrderData.shippingAddress.phone || customerInfo.phone,
-        email: guestOrderData.shippingAddress.email || customerInfo.email,
-        address: guestOrderData.shippingAddress.address,
-        city: guestOrderData.shippingAddress.city,
-        state: guestOrderData.shippingAddress.state || "",
-        zipCode: guestOrderData.shippingAddress.zipCode || guestOrderData.shippingAddress.postalCode || "",
-        country: guestOrderData.shippingAddress.country || "Bangladesh",
-      },
-      billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-      customerInfo: customerInfo,
-      couponCode: guestOrderData.couponCode || null,
-      specialInstructions: guestOrderData.specialInstructions || "",
-      transactionId: tran_id,
-      paymentStatus: "pending",
-      paymentMethod: paymentMethod,
-    }
+      };
+    }),
+    subtotal: subtotal,
+    totalDiscount: guestOrderData.totalDiscount || 0,
+    shippingCost: shippingCost,
+    totalAmount: finalTotal,
+    shippingAddress: {
+      fullName: guestOrderData.shippingAddress.fullName || customerInfo.name,
+      phone: guestOrderData.shippingAddress.phone || customerInfo.phone,
+      email: guestOrderData.shippingAddress.email || customerInfo.email,
+      address: guestOrderData.shippingAddress.address,
+      city: guestOrderData.shippingAddress.city,
+      state: guestOrderData.shippingAddress.state || "",
+      zipCode: guestOrderData.shippingAddress.zipCode || guestOrderData.shippingAddress.postalCode || "",
+      country: guestOrderData.shippingAddress.country || "Bangladesh",
+    },
+    billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
+    customerInfo: customerInfo,
+    couponCode: guestOrderData.couponCode || null,
+    specialInstructions: guestOrderData.specialInstructions || "",
+    transactionId: tran_id,
+    paymentStatus: "pending",
+    paymentMethod: paymentMethod,
+  };
 
     // Aamarpay payment data preparation
     const store_id = process.env.AMARPAY_STORE_ID

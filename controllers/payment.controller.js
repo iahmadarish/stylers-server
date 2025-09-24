@@ -129,10 +129,10 @@ export const initializeGuestPayment = async (req, res) => {
       },
       orderNumber,
       transactionId: tran_id,
-      items: guestOrderData.items.map((item) => ({
-  productId: mongoose.Types.ObjectId(item.productId),
-  variantId: item.variantId ? mongoose.Types.ObjectId(item.variantId) : null,
-  colorVariantId: item.colorVariantId ? mongoose.Types.ObjectId(item.colorVariantId) : null,
+     items: guestOrderData.items.map((item) => ({
+  productId: toObjectId(item.productId),
+  variantId: toObjectId(item.variantId),
+  colorVariantId: toObjectId(item.colorVariantId),
   productTitle: item.productTitle || "Unknown Product",
   productImage: item.productImage || "/placeholder.svg",
   quantity: item.quantity || 1,
@@ -146,6 +146,7 @@ export const initializeGuestPayment = async (req, res) => {
     ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) *
     (item.quantity || 1),
 })),
+
       subtotal,
       totalDiscount: guestOrderData.totalDiscount || 0,
       shippingCost,
@@ -158,7 +159,7 @@ export const initializeGuestPayment = async (req, res) => {
       status: "pending",        // ✅ not confirmed yet
       paymentStatus: "pending", // ✅ will update after success/IPN
     });
-
+console.log("🛒 Guest order items before save:", JSON.stringify(order.items, null, 2));
     await order.save();
 
     // Aamarpay payload

@@ -158,40 +158,54 @@ export const sendTestEmail = async (toEmail) => {
 
 // Helper function to send email for both guest and logged-in orders
 export const sendOrderEmails = async (order, toEmail, isGuest = false) => {
-  const htmlContent = generateOrderConfirmationEmail(order, isGuest);
-  const transporter = createTransporter();
+    try {
+        let customerName = "Valued Customer"; // Default value
 
-  const mailOptions = {
-    from: process.env.EMAIL_USERNAME,
-    to: toEmail,
-    subject: `Order Confirmation - ${order.orderNumber}`,
-    html: htmlContent,
-  };
+        if (isGuest) {
+            customerName = order.guestCustomerInfo?.name || "Valued Customer";
+        } else {
+            // Fetch the user from the database using the user ID from the order
+            const user = await User.findById(order.user);
+            if (user) {
+                customerName = user.name;
+            }
+        }
+        
+        // Pass the customerName to the function that generates the email content
+        const htmlContent = generateOrderConfirmationEmail(order, isGuest, customerName);
+        const transporter = createTransporter();
 
-  const result = await transporter.sendMail(mailOptions);
-  console.log("✅ Mail sent successfully", result.messageId);
-  return { success: true };
+        const mailOptions = {
+            from: process.env.EMAIL_USERNAME,
+            to: toEmail,
+            subject: `Order Confirmation - ${order.orderNumber}`,
+            html: htmlContent,
+        };
+
+        const result = await transporter.sendMail(mailOptions);
+        console.log("✅ Mail sent successfully", result.messageId);
+        return { success: true };
+    } catch (error) {
+        console.error("❌ sendOrderEmails error:", error);
+        return { success: false, error: error.message };
+    }
 };
 
-export const generateOrderConfirmationEmail = (order, isGuest = false) => {
-  const customerName = isGuest
-    ? order.guestCustomerInfo.name
-    : order.user?.name || "Valued Customer";
+export const generateOrderConfirmationEmail = (order, isGuest = false, customerName) => {
+    const customerEmail = isGuest
+        ? order.guestCustomerInfo.email
+        : order.user?.email || "";
 
-  const customerEmail = isGuest
-    ? order.guestCustomerInfo.email
-    : order.user?.email || "";
+    const shippingAddress = order.shippingAddress || {};
+    const orderNumber = order.orderNumber;
+    const orderAmount = order.totalAmount.toLocaleString('en-US', { style: 'currency', currency: 'BDT' });
+    const paymentMethod = order.paymentMethod === "cash_on_delivery" ? "Cash on Delivery" : "Paid Online";
 
-  const shippingAddress = order.shippingAddress || {};
-  const orderNumber = order.orderNumber;
-  const orderAmount = order.totalAmount.toLocaleString('en-US', { style: 'currency', currency: 'BDT' });
-  const paymentMethod = order.paymentMethod === "cash_on_delivery" ? "Cash on Delivery" : "Paid Online";
+    const trackLink = isGuest
+        ? `https://paarel.com/track-order?orderNumber=${orderNumber}`
+        : "https://paarel.com/profile";
 
-  const trackLink = isGuest
-    ? `https://paarel.com/track-order?orderNumber=${orderNumber}`
-    : "https://paarel.com/profile";
-
-  return `
+    return `
   <!DOCTYPE html>
   <html>
   <head>
@@ -347,87 +361,81 @@ export const generateOrderConfirmationEmail = (order, isGuest = false) => {
     </style>
   </head>
   <body>
-    <div class="container">
-      <!-- Header -->
-      <div class="header">
-        <div class="header-content">
-          <img src="https://paarel.com/assets/01-B-KQiC7Y.png" alt="Paarel Logo" class="logo" />
-          <h1 class="order-confirmed">PAAREL - Order Confirmation</h1>
-          <div class="order-number">Order #${orderNumber}</div>
-          <p>Thank you for shopping with us</p>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div class="content">
-        <h2 class="greeting">Hello ${customerName},</h2>
-        <p>Your order has been successfully placed and is being processed.</p>
-        
-        <!-- Order Details -->
-        <div class="info-card">
-          <h3 style="margin-bottom: 15px; color: #0073e6;">Order Information</h3>
-          
-          <div class="info-row">
-            <div class="info-label">Customer Name:</div>
-            <div class="info-value">${customerName}</div>
-          </div>
-          
-          <div class="info-row">
-            <div class="info-label">Email:</div>
-            <div class="info-value">${customerEmail}</div>
-          </div>
-          
-          <div class="info-row">
-            <div class="info-label">Shipping Address:</div>
-            <div class="info-value">
-              ${shippingAddress.address}, ${shippingAddress.city}, 
-              ${shippingAddress.state || ""}, ${shippingAddress.zipCode || ""}, 
-              ${shippingAddress.country || "Bangladesh"}
+        <div class="container">
+            <div class="header">
+                <div class="header-content">
+                    <img src="https://paarel.com/assets/01-B-KQiC7Y.png" alt="Paarel Logo" class="logo" />
+                    <h1 class="order-confirmed">PAAREL - Order Confirmation</h1>
+                    <div class="order-number">Order #${orderNumber}</div>
+                    <p>Thank you for shopping with us</p>
+                </div>
             </div>
-          </div>
-          
-          <div class="info-row">
-            <div class="info-label">Order Amount:</div>
-            <div class="info-value" style="font-weight: 600; color: #0073e6;">${orderAmount}</div>
-          </div>
-          
-          <div class="info-row">
-            <div class="info-label">Payment Method:</div>
-            <div class="info-value">${paymentMethod}</div>
-          </div>
-        </div>
 
-        <div class="divider"></div>
+            <div class="content">
+                <h2 class="greeting">Hello ${customerName},</h2>
+                <p>Your order has been successfully placed and is being processed.</p>
+                
+                <div class="info-card">
+                    <h3 style="margin-bottom: 15px; color: #0073e6;">Order Information</h3>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Customer Name:</div>
+                        <div class="info-value">${customerName}</div>
+                    </div>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Email:</div>
+                        <div class="info-value">${customerEmail}</div>
+                    </div>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Shipping Address:</div>
+                        <div class="info-value">
+                            ${shippingAddress.address}, ${shippingAddress.city}, 
+                            ${shippingAddress.state || ""}, ${shippingAddress.zipCode || ""}, 
+                            ${shippingAddress.country || "Bangladesh"}
+                        </div>
+                    </div>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Order Amount:</div>
+                        <div class="info-value" style="font-weight: 600; color: #0073e6;">${orderAmount}</div>
+                    </div>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Payment Method:</div>
+                        <div class="info-value">${paymentMethod}</div>
+                    </div>
+                </div>
 
-        <!-- Track Order -->
-        <h3 style="margin-bottom: 15px;">Track Your Order</h3>
-        <p style="margin-bottom: 20px;">You can track your order status using the link below:</p>
-        <a href="${trackLink}" class="cta-button">${isGuest ? "Track Your Order simplify" : "Check Order status & Details"}</a>
+                <div class="divider"></div>
 
-        <!-- Support Section -->
-        <div class="support-section">
-          <div class="support-title">Need Help?</div>
-          <p>Contact our customer support team for assistance with your order</p>
-          <p>
-            <a href="mailto:support@paarel.com" class="support-contact">support@paarel.com</a> | 
-            <a href="tel:01842942484" class="support-contact">01842942484</a>
-          </p>
-        </div>
-      </div>
+                <h3 style="margin-bottom: 15px;">Track Your Order</h3>
+                <p style="margin-bottom: 20px;">You can track your order status using the link below:</p>
+                <a href="${trackLink}" class="cta-button">${isGuest ? "Track Your Order simplify" : "Check Order status & Details"}</a>
 
-      <!-- Footer -->
-      <div class="footer">
-        <div class="social-links">
-          <a href="https://facebook.com/paarelofficial" target="_blank">Facebook</a>
-          <a href="https://instagram.com/parrel.official" target="_blank">Instagram</a>
-          <a href="https://paarel.com" target="_blank">Website</a>
+                <div class="support-section">
+                    <div class="support-title">Need Help?</div>
+                    <p>Contact our customer support team for assistance with your order</p>
+                    <p>
+                        <a href="mailto:support@paarel.com" class="support-contact">support@paarel.com</a> | 
+                        <a href="tel:01842942484" class="support-contact">01842942484</a>
+                    </p>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="social-links">
+                    <a href="https://facebook.com/paarelofficial" target="_blank">Facebook</a>
+                    <a href="https://instagram.com/parrel.official" target="_blank">Instagram</a>
+                    <a href="https://paarel.com" target="_blank">Website</a>
+                </div>
+                <div class="copyright">
+                    &copy; ${new Date().getFullYear()} Paarel. All rights reserved.
+                </div>
+            </div>
         </div>
-        <div class="copyright">
-          &copy; ${new Date().getFullYear()} Paarel. All rights reserved.
-        </div>
-      </div>
-    </div>
-  </body>
+    </body>
   </html>
   `;
 };

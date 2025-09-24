@@ -123,7 +123,7 @@ const productSchema = new mongoose.Schema(
         colorCode: {
           type: String,
           required: false,
-          default: "#000000",
+          default: "#0c5469ff",
         },
         colorName: {
           type: String,

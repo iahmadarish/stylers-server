@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import User from "../models/User.js";
+import Order from "../models/Order.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +33,8 @@ const createTransporter = () => {
 export const sendOrderConfirmationEmail = async (orderData) => {
   try {
     console.log('📧 Attempting to send email to:', orderData.email);
-
+console.log('Order object received:', order); // ⬅️ Add this line
+        console.log('isGuest flag:', isGuest);
     // Validate email data
     if (!orderData.email) {
       console.error('❌ No email address provided');
@@ -162,14 +164,27 @@ export const sendOrderEmails = async (order, toEmail, isGuest = false) => {
         let customerName = "Valued Customer"; // Default value
 
         if (isGuest) {
+            // Guest user - use guest information
             customerName = order.guestCustomerInfo?.name || "Valued Customer";
         } else {
-            // Fetch the user from the database using the user ID from the order
-            const user = await User.findById(order.user);
-            if (user) {
-                customerName = user.name;
+            // Logged-in user - fetch from database using userId
+            if (order.userId) {
+                const user = await User.findById(order.userId);
+                if (user) {
+                    customerName = user.name;
+                } else {
+                    console.warn('⚠️ User not found for ID:', order.userId);
+                    // Fallback to shipping address name if user not found
+                    customerName = order.shippingAddress?.fullName || "Valued Customer";
+                }
+            } else {
+                // If no userId but not guest, try shipping address name
+                customerName = order.shippingAddress?.fullName || "Valued Customer";
             }
         }
+        
+        console.log('👤 Determined customer name:', customerName);
+        console.log('📦 Order type:', isGuest ? 'Guest' : 'Logged-in');
         
         // Pass the customerName to the function that generates the email content
         const htmlContent = generateOrderConfirmationEmail(order, isGuest, customerName);

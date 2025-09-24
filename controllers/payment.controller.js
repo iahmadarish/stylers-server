@@ -130,22 +130,22 @@ export const initializeGuestPayment = async (req, res) => {
       orderNumber,
       transactionId: tran_id,
       items: guestOrderData.items.map((item) => ({
-        productId: item.productId,
-        productTitle: item.productTitle || "Unknown Product",
-        productImage: item.productImage || "/placeholder.svg",
-        variantId: item.variantId || null,
-        colorVariantId: item.colorVariantId || null,
-        quantity: item.quantity || 1,
-        originalPrice: item.originalPrice || 0,
-        discountedPrice: item.discountedPrice || item.originalPrice || 0,
-        discountPercentage: item.discountPercentage || 0,
-        totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
-        totalDiscountedPrice:
-          (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-        discountAmount:
-          ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) *
-          (item.quantity || 1),
-      })),
+  productId: mongoose.Types.ObjectId(item.productId),
+  variantId: item.variantId ? mongoose.Types.ObjectId(item.variantId) : null,
+  colorVariantId: item.colorVariantId ? mongoose.Types.ObjectId(item.colorVariantId) : null,
+  productTitle: item.productTitle || "Unknown Product",
+  productImage: item.productImage || "/placeholder.svg",
+  quantity: item.quantity || 1,
+  originalPrice: item.originalPrice || 0,
+  discountedPrice: item.discountedPrice || item.originalPrice || 0,
+  discountPercentage: item.discountPercentage || 0,
+  totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
+  totalDiscountedPrice:
+    (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+  discountAmount:
+    ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) *
+    (item.quantity || 1),
+})),
       subtotal,
       totalDiscount: guestOrderData.totalDiscount || 0,
       shippingCost,

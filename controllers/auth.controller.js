@@ -170,30 +170,37 @@ export const register = catchAsync(async (req, res, next) => {
 // @route   POST /api/auth/verify-email
 // @access  Public
 export const verifyEmail = catchAsync(async (req, res, next) => {
-  const { email, otp, token } = req.body
-  if (!email || !otp || !token) {
-    return next(new AppError("Please provide email, OTP, and token", 400))
-  }
-  // Hash token
-  const hashedToken = crypto.createHash("sha256").update(token).digest("hex")
-  // Find user by email and token
-  const user = await User.findOne({
-    email,
-    emailOTPToken: hashedToken,
-    emailOTP: otp,
-    emailOTPExpires: { $gt: Date.now() },
-  })
-  if (!user) {
-    return next(new AppError("Invalid or expired OTP", 400))
-  }
-  // Update user
-  user.isVerified = true
-  user.emailOTP = undefined
-  user.emailOTPExpires = undefined
-  user.emailOTPToken = undefined
-  await user.save()
-  // Send token
-  sendTokenResponse(user, 200, res)
+  const { email, otp, token } = req.body
+  if (!email || !otp || !token) {
+    return res.status(400).json({
+      status: "error",
+      message: "Please provide email, OTP, and token"
+    })
+  }
+  // Hash token
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex")
+  // Find user by email and token
+  const user = await User.findOne({
+    email,
+    emailOTPToken: hashedToken,
+    emailOTP: otp,
+    emailOTPExpires: { $gt: Date.now() },
+  })
+  if (!user) {
+    // --- CHANGE: Send a direct JSON response ---
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid or expired OTP"
+    })
+  }
+  // Update user
+  user.isVerified = true
+  user.emailOTP = undefined
+  user.emailOTPExpires = undefined
+  user.emailOTPToken = undefined
+  await user.save()
+  // Send token
+  sendTokenResponse(user, 200, res)
 })
 
 // @desc    Verify phone OTP

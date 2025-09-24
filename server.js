@@ -8,7 +8,7 @@ import passport from "passport"
 import session from "express-session"
 import cron from 'node-cron';
 import Product from './models/Product.js';
-
+import { startCronJobs } from './utils/cronJobs.js';
 
 // Load environment variables first
 dotenv.config()
@@ -145,6 +145,9 @@ cron.schedule('*/10 * * * *', async () => {
     console.error('[CRON] Error in discount update:', error);
   }
 });
+
+startCronJobs();
+
 
 // Checking server start up onces the server start
 setTimeout(async () => {

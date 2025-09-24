@@ -89,81 +89,46 @@ const updateProductStock = async (orderItems) => {
 }
 
 // Initialize payment for guest orders
+// Initialize payment for guest orders
 export const initializeGuestPayment = async (req, res) => {
   try {
-    console.log("=== Initialize Guest Payment Request ===")
-    console.log("Request body:", JSON.stringify(req.body, null, 2))
+    const { guestOrderData, customerInfo, paymentMethod = "card" } = req.body;
 
-    const { guestOrderData, customerInfo, paymentMethod = "card" } = req.body
-
-    // Detailed validation
-    if (!guestOrderData) {
-      return res.status(400).json({
-        success: false,
-        message: "Guest order data is required",
-      })
+    if (!guestOrderData || !customerInfo) {
+      return res.status(400).json({ success: false, message: "Invalid request" });
     }
 
-    if (!customerInfo) {
-      return res.status(400).json({
-        success: false,
-        message: "Customer information is required",
-      })
-    }
-
-    if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Customer name, email, and phone are required",
-        missing: {
-          name: !customerInfo.name,
-          email: !customerInfo.email,
-          phone: !customerInfo.phone,
-        },
-      })
-    }
-
-    if (!guestOrderData.shippingAddress) {
-      return res.status(400).json({
-        success: false,
-        message: "Shipping address is required",
-      })
-    }
-
-    if (!guestOrderData.shippingAddress.address || !guestOrderData.shippingAddress.city) {
-      return res.status(400).json({
-        success: false,
-        message: "Shipping address and city are required",
-        missing: {
-          address: !guestOrderData.shippingAddress.address,
-          city: !guestOrderData.shippingAddress.city,
-        },
-      })
-    }
-
-    if (!guestOrderData.items || !Array.isArray(guestOrderData.items) || guestOrderData.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Order items are required",
-      })
-    }
-
-    // Calculate order amounts
+    // Calculate order totals
     const subtotal =
       guestOrderData.subtotal ||
       guestOrderData.items.reduce(
-        (sum, item) => sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-        0,
-      )
+        (sum, item) =>
+          sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+        0
+      );
 
-    const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city)
-    const finalTotal = subtotal + shippingCost
+    const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city);
+    const finalTotal = subtotal + shippingCost;
 
-    // Generate unique transaction ID for guest
-    const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`
+    // Generate transaction id
+    const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-    // Prepare complete guest order data for storage
-    const completeGuestOrderData = {
+    // Generate temporary order number
+    const orderCount = await Order.countDocuments();
+    const orderNumber = `GUEST-${Date.now()}-${(orderCount + 1)
+      .toString()
+      .padStart(4, "0")}`;
+
+    // 👉 Create guest order in DB immediately
+    const order = new Order({
+      isGuestOrder: true,
+      guestCustomerInfo: {
+        name: customerInfo.name,
+        email: customerInfo.email,
+        phone: customerInfo.phone,
+      },
+      orderNumber,
+      transactionId: tran_id,
       items: guestOrderData.items.map((item) => ({
         productId: item.productId,
         productTitle: item.productTitle || "Unknown Product",
@@ -175,42 +140,32 @@ export const initializeGuestPayment = async (req, res) => {
         discountedPrice: item.discountedPrice || item.originalPrice || 0,
         discountPercentage: item.discountPercentage || 0,
         totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
-        totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+        totalDiscountedPrice:
+          (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
         discountAmount:
-          ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1),
+          ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) *
+          (item.quantity || 1),
       })),
-      subtotal: subtotal,
+      subtotal,
       totalDiscount: guestOrderData.totalDiscount || 0,
-      shippingCost: shippingCost,
+      shippingCost,
       totalAmount: finalTotal,
-      shippingAddress: {
-        fullName: guestOrderData.shippingAddress.fullName || customerInfo.name,
-        phone: guestOrderData.shippingAddress.phone || customerInfo.phone,
-        email: guestOrderData.shippingAddress.email || customerInfo.email,
-        address: guestOrderData.shippingAddress.address,
-        city: guestOrderData.shippingAddress.city,
-        state: guestOrderData.shippingAddress.state || "",
-        zipCode: guestOrderData.shippingAddress.zipCode || guestOrderData.shippingAddress.postalCode || "",
-        country: guestOrderData.shippingAddress.country || "Bangladesh",
-      },
+      shippingAddress: guestOrderData.shippingAddress,
       billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-      customerInfo: customerInfo,
+      paymentMethod,
       couponCode: guestOrderData.couponCode || null,
       specialInstructions: guestOrderData.specialInstructions || "",
-      transactionId: tran_id,
-      paymentStatus: "pending",
-      paymentMethod: paymentMethod,
-    }
+      status: "pending",        // ✅ not confirmed yet
+      paymentStatus: "pending", // ✅ will update after success/IPN
+    });
 
-    // Aamarpay payment data preparation
-    const store_id = process.env.AMARPAY_STORE_ID
-    const signature_key = process.env.AMARPAY_SIGNATURE_KEY
+    await order.save();
 
-    // ✅ Fixed: Use URL parameters instead of query parameters to match frontend routes
+    // Aamarpay payload
     const paymentData = {
-      store_id: store_id,
-      signature_key: signature_key,
-      tran_id: tran_id,
+      store_id: process.env.AMARPAY_STORE_ID,
+      signature_key: process.env.AMARPAY_SIGNATURE_KEY,
+      tran_id,
       amount: finalTotal.toFixed(2),
       currency: "BDT",
       desc: `Guest Order Payment - ${customerInfo.name}`,
@@ -220,82 +175,44 @@ export const initializeGuestPayment = async (req, res) => {
       cus_add1: guestOrderData.shippingAddress.address.substring(0, 50),
       cus_city: guestOrderData.shippingAddress.city,
       cus_country: guestOrderData.shippingAddress.country || "Bangladesh",
-      // ✅ Fixed: Frontend URLs with URL parameters
       success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,
       fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
       cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
-      // Server-side callback for payment verification
       notify_url: `${process.env.BACKEND_URL}/api/payment/notify`,
       type: "json",
-    }
-
-    console.log("Aamarpay payment data:", JSON.stringify(paymentData, null, 2))
-
-    // Store guest order data temporarily for later retrieval
-    global.pendingGuestOrders = global.pendingGuestOrders || new Map()
-    global.pendingGuestOrders.set(tran_id, completeGuestOrderData)
-
-    console.log("Stored guest order data for transaction:", tran_id)
-    console.log("Pending guest orders count:", global.pendingGuestOrders.size)
+    };
 
     // Send request to Aamarpay
-    try {
-      const response = await axios.post(
-        process.env.AMARPAY_PAYMENT_URL || "https://sandbox.aamarpay.com/jsonpost.php",
-        paymentData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 15000,
+    const response = await axios.post(
+      process.env.AMARPAY_PAYMENT_URL || "https://sandbox.aamarpay.com/jsonpost.php",
+      paymentData,
+      { headers: { "Content-Type": "application/json" }, timeout: 15000 }
+    );
+
+    if (response.data && response.data.payment_url) {
+      res.status(200).json({
+        success: true,
+        message: "Payment initialized successfully",
+        data: {
+          payment_url: response.data.payment_url,
+          orderId: order._id,
+          transactionId: tran_id,
         },
-      )
-
-      console.log("Aamarpay API response:", response.data)
-
-      if (response.data && response.data.payment_url) {
-        res.status(200).json({
-          success: true,
-          message: "Payment initialized successfully",
-          data: {
-            payment_url: response.data.payment_url,
-            transactionId: tran_id,
-            orderAmount: finalTotal,
-            customerEmail: customerInfo.email,
-          },
-        })
-      } else {
-        // Clean up if failed
-        global.pendingGuestOrders.delete(tran_id)
-
-        console.error("Aamarpay error response:", response.data)
-        res.status(400).json({
-          success: false,
-          message: response.data.msg || response.data.message || "Payment initialization failed",
-          aamarpayResponse: response.data,
-        })
-      }
-    } catch (axiosError) {
-      // Clean up if failed
-      global.pendingGuestOrders.delete(tran_id)
-
-      console.error("Axios error calling Aamarpay:", axiosError.response?.data || axiosError.message)
-
-      res.status(500).json({
+      });
+    } else {
+      // ❌ Delete temp order if gateway init fails
+      await Order.findByIdAndDelete(order._id);
+      res.status(400).json({
         success: false,
-        message: "Failed to connect to payment gateway",
-        error: axiosError.response?.data || axiosError.message,
-      })
+        message: response.data.msg || "Payment initialization failed",
+      });
     }
-  } catch (error) {
-    console.error("Error initializing guest payment:", error)
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    })
+  } catch (err) {
+    console.error("Error initializing guest payment:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
-}
+};
+
 
 // Cash on Delivery order
 export const createCODOrder = async (req, res) => {
@@ -1082,56 +999,157 @@ export const paymentCancel = async (req, res) => {
 
 // MAIN IPN/Notify Handler - This is where the actual order processing happens
 export const paymentNotify = async (req, res) => {
-    try {
-        console.log("🔔 IPN (Notify) Handler Called")
-        console.log("Request body:", JSON.stringify(req.body, null, 2))
+  try {
+    console.log("🔔 === IPN/Notify Handler ===")
+    console.log("📨 Request body:", JSON.stringify(req.body, null, 2))
+    console.log("📋 Request headers:", req.headers)
+    console.log("🕐 Timestamp:", new Date().toISOString())
 
-        const { tran_id, pay_status, amount, card_type, bank_tran_id } = req.body
+    const callbackData = req.body
+    const tran_id = callbackData.tran_id || callbackData.transaction_id || callbackData.mer_txnid
 
-        if (pay_status === "Successful") {
-            // Find the order using the transaction ID
-            const order = await Order.findOne({ transactionId: tran_id })
-
-            if (order) {
-                if (order.paymentStatus === "pending") {
-                    order.paymentStatus = "paid"
-                    order.status = "confirmed"
-                    order.paymentDetails = { // Optional: store payment details
-                        amount,
-                        cardType: card_type,
-                        bankTransactionId: bank_tran_id,
-                    }
-
-                    await order.save()
-                    console.log("✅ Order updated successfully for transaction:", tran_id)
-
-                    // Send confirmation email
-                    try {
-                        const email = order.isGuestOrder ? order.guestCustomerInfo.email : order.shippingAddress.email
-                        await sendOrderEmails(order, email)
-                        console.log("✅ Order confirmation email sent")
-                    } catch (emailError) {
-                        console.error("❌ Failed to send confirmation email:", emailError.message)
-                    }
-
-                    return res.status(200).send("OK")
-                } else {
-                    console.log("⚠️ Order already processed:", tran_id)
-                    return res.status(200).send("OK - ALREADY PROCESSED")
-                }
-            } else {
-                console.error("❌ Order not found for transaction:", tran_id)
-                return res.status(404).send("FAILED - Order not found")
-            }
-        } else {
-            console.log("⚠️ Payment not successful for transaction:", tran_id)
-            // Handle failed payments here if needed
-            return res.status(200).send("OK - PAYMENT NOT SUCCESSFUL")
-        }
-    } catch (error) {
-        console.error("❌ Error in IPN handler:", error)
-        return res.status(500).send("FAILED - Internal server error")
+    if (!tran_id) {
+      console.log("❌ Transaction ID missing in IPN")
+      return res.status(400).send("FAILED - Transaction ID missing")
     }
+
+    console.log("🔍 Processing IPN for transaction:", tran_id)
+
+    // Verify payment status
+    const paymentStatus = callbackData.pay_status || callbackData.status
+    const isPaymentSuccessful = paymentStatus === "Successful" || paymentStatus === "success"
+
+    if (!isPaymentSuccessful) {
+      console.log("❌ Payment not successful in IPN:", paymentStatus)
+      return res.status(400).send("FAILED - Payment not successful")
+    }
+
+    // Security check - verify store ID
+    if (callbackData.store_id && callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
+      console.log(
+        "❌ Store ID mismatch in IPN. Expected:",
+        process.env.AMARPAY_STORE_ID,
+        "Received:",
+        callbackData.store_id,
+      )
+      return res.status(400).send("FAILED - Store ID verification failed")
+    }
+
+    console.log("✅ IPN verification successful")
+
+    // Check if it's a guest order
+    const isGuest = tran_id.startsWith("GUEST_TXN_")
+
+    if (isGuest) {
+      console.log("🎯 Processing guest order IPN")
+
+      // Check if order already exists
+      const existingOrder = await Order.findOne({ transactionId: tran_id })
+      if (existingOrder) {
+        console.log("✅ Guest order already processed:", existingOrder.orderNumber)
+        return res.status(200).send("OK - Order already processed")
+      }
+
+      // Get guest order data
+      global.pendingGuestOrders = global.pendingGuestOrders || new Map()
+      const guestOrderData = global.pendingGuestOrders.get(tran_id)
+
+      if (!guestOrderData) {
+        console.log("❌ Guest order data not found for transaction:", tran_id)
+        console.log("Available guest transactions:", Array.from(global.pendingGuestOrders.keys()))
+        console.log("🔄 This might be handled by success handler instead")
+        return res.status(200).send("OK - Will be handled by success handler")
+      }
+
+      // Create guest order
+      const orderCount = await Order.countDocuments()
+      const orderNumber = `GUEST-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`
+
+      const order = new Order({
+        isGuestOrder: true,
+        guestCustomerInfo: {
+          name: guestOrderData.customerInfo.name,
+          email: guestOrderData.customerInfo.email,
+          phone: guestOrderData.customerInfo.phone,
+        },
+        orderNumber: orderNumber,
+        transactionId: tran_id,
+        items: guestOrderData.items,
+        subtotal: guestOrderData.subtotal,
+        totalDiscount: guestOrderData.totalDiscount || 0,
+        shippingCost: guestOrderData.shippingCost,
+        tax: 0,
+        totalAmount: guestOrderData.totalAmount,
+        shippingAddress: guestOrderData.shippingAddress,
+        billingAddress: guestOrderData.billingAddress || guestOrderData.shippingAddress,
+        paymentMethod: "card",
+        couponCode: guestOrderData.couponCode || null,
+        couponDiscount: 0,
+        specialInstructions: guestOrderData.specialInstructions || "",
+        status: "confirmed",
+        paymentStatus: "paid",
+        paymentGatewayResponse: {
+          pg_txnid: callbackData.pg_txnid || callbackData.transaction_id,
+          bank_txn: callbackData.bank_txn,
+          card_type: callbackData.card_type,
+          pay_time: callbackData.pay_time || new Date().toISOString(),
+          amount: callbackData.amount || guestOrderData.totalAmount,
+          store_amount: callbackData.store_amount,
+          currency: callbackData.currency || "BDT",
+          source: "ipn_handler",
+        },
+      })
+
+      await order.save()
+      console.log("✅ Guest order created via IPN:", order.orderNumber)
+
+      // Update product stock
+      try {
+        await updateProductStock(guestOrderData.items)
+        console.log("✅ Product stock updated for guest order")
+      } catch (stockError) {
+        console.error("❌ Error updating product stock:", stockError)
+      }
+
+      // Clean up pending data
+      global.pendingGuestOrders.delete(tran_id)
+
+      // Send confirmation email
+      try {
+        await sendOrderConfirmationEmail(order)
+        console.log("✅ Order confirmation email sent")
+      } catch (emailError) {
+        console.error("❌ Error sending confirmation email:", emailError)
+      }
+
+      return res.status(200).send("OK - Guest order processed successfully")
+    } else {
+      // Handle logged-in user orders
+      console.log("👤 Processing logged-in user order IPN")
+
+      const order = await Order.findOne({ transactionId: tran_id })
+      if (order) {
+        // Update payment status
+        order.paymentStatus = "paid"
+        order.status = "confirmed"
+        order.paymentGatewayResponse = {
+          ...order.paymentGatewayResponse,
+          ...callbackData,
+          source: "ipn_handler",
+        }
+        await order.save()
+
+        console.log("✅ User order payment status updated:", order.orderNumber)
+        return res.status(200).send("OK - User order updated successfully")
+      } else {
+        console.log("❌ User order not found for transaction:", tran_id)
+        return res.status(404).send("FAILED - Order not found")
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error in IPN handler:", error)
+    return res.status(500).send("FAILED - Internal server error")
+  }
 }
 
 // Legacy IPN handler (keeping for compatibility)

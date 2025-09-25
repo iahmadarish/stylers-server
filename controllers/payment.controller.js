@@ -23,7 +23,6 @@ async function calculateOrderAmount(userId, shippingAddress) {
       path: "items.productId",
       model: "Product",
     })
-
     if (!cart || !cart.items || cart.items.length === 0) {
       throw new Error("Cart is empty")
     }
@@ -50,7 +49,6 @@ function calculateGuestOrderAmount(guestOrderData) {
     const subtotal = guestOrderData.subtotal || 0
     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress?.city)
     const finalTotal = subtotal + shippingCost
-
     return {
       subtotal,
       discount: guestOrderData.totalDiscount || 0,
@@ -75,14 +73,12 @@ const updateProductStock = async (orderItems) => {
         variant.stock = Math.max(0, variant.stock - item.quantity)
       }
     }
-
     if (item.colorVariantId) {
       const colorVariant = product.colorVariants.id(item.colorVariantId)
       if (colorVariant) {
         colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity)
       }
     }
-
     product.stock = Math.max(0, product.stock - item.quantity)
     await product.save()
   }
@@ -93,9 +89,7 @@ export const initializeGuestPayment = async (req, res) => {
   try {
     console.log("=== Initialize Guest Payment Request ===")
     console.log("Request body:", JSON.stringify(req.body, null, 2))
-
     const { guestOrderData, customerInfo, paymentMethod = "card" } = req.body
-
     // Detailed validation
     if (!guestOrderData) {
       return res.status(400).json({
@@ -103,7 +97,6 @@ export const initializeGuestPayment = async (req, res) => {
         message: "Guest order data is required",
       })
     }
-
     if (!customerInfo) {
       return res.status(400).json({
         success: false,
@@ -122,14 +115,12 @@ export const initializeGuestPayment = async (req, res) => {
         },
       })
     }
-
     if (!guestOrderData.shippingAddress) {
       return res.status(400).json({
         success: false,
         message: "Shipping address is required",
       })
     }
-
     if (!guestOrderData.shippingAddress.address || !guestOrderData.shippingAddress.city) {
       return res.status(400).json({
         success: false,
@@ -140,14 +131,12 @@ export const initializeGuestPayment = async (req, res) => {
         },
       })
     }
-
     if (!guestOrderData.items || !Array.isArray(guestOrderData.items) || guestOrderData.items.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Order items are required",
       })
     }
-
     // Calculate order amounts
     const subtotal =
       guestOrderData.subtotal ||
@@ -155,7 +144,6 @@ export const initializeGuestPayment = async (req, res) => {
         (sum, item) => sum + (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
         0,
       )
-
     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city)
     const finalTotal = subtotal + shippingCost
 
@@ -165,9 +153,6 @@ export const initializeGuestPayment = async (req, res) => {
     // Prepare complete guest order data for storage
     const completeGuestOrderData = {
     items: guestOrderData.items.map((item) => {
-      // ✅ সঠিক পদ্ধতি: নিশ্চিত করুন যে colorVariantId একটি বৈধ ObjectId
-      // যেহেতু আপনার ফ্রন্টএন্ডে সম্ভবত colorVariantId একটি MongoDB ObjectId হিসেবেই আছে,
-      // তাই এখানে সরাসরি তা ব্যবহার করুন।
       const colorVariantId = item.colorVariantId ? item.colorVariantId : null;
 
       return {
@@ -213,7 +198,7 @@ export const initializeGuestPayment = async (req, res) => {
     const store_id = process.env.AMARPAY_STORE_ID
     const signature_key = process.env.AMARPAY_SIGNATURE_KEY
 
-    // ✅ Fixed: Use URL parameters instead of query parameters to match frontend routes
+    //Use URL parameters instead of query parameters to match frontend routes
     const paymentData = {
       store_id: store_id,
       signature_key: signature_key,
@@ -227,7 +212,7 @@ export const initializeGuestPayment = async (req, res) => {
       cus_add1: guestOrderData.shippingAddress.address.substring(0, 50),
       cus_city: guestOrderData.shippingAddress.city,
       cus_country: guestOrderData.shippingAddress.country || "Bangladesh",
-      // ✅ Fixed: Frontend URLs with URL parameters
+      //Frontend URLs with URL parameters
       success_url: `${process.env.FRONTEND_URL}/payment-success/${tran_id}`,
       fail_url: `${process.env.FRONTEND_URL}/payment-fail/${tran_id}`,
       cancel_url: `${process.env.FRONTEND_URL}/payment-cancel/${tran_id}`,
@@ -257,9 +242,7 @@ export const initializeGuestPayment = async (req, res) => {
           timeout: 15000,
         },
       )
-
       console.log("Aamarpay API response:", response.data)
-
       if (response.data && response.data.payment_url) {
         res.status(200).json({
           success: true,
@@ -274,7 +257,6 @@ export const initializeGuestPayment = async (req, res) => {
       } else {
         // Clean up if failed
         global.pendingGuestOrders.delete(tran_id)
-
         console.error("Aamarpay error response:", response.data)
         res.status(400).json({
           success: false,
@@ -285,9 +267,7 @@ export const initializeGuestPayment = async (req, res) => {
     } catch (axiosError) {
       // Clean up if failed
       global.pendingGuestOrders.delete(tran_id)
-
       console.error("Axios error calling Aamarpay:", axiosError.response?.data || axiosError.message)
-
       res.status(500).json({
         success: false,
         message: "Failed to connect to payment gateway",

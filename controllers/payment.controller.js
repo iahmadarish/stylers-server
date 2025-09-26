@@ -1224,18 +1224,26 @@ export const paymentCancel = async (req, res) => {
 
 
 
+// payment.controller.js
+
+// ... (অন্যান্য কোড)
+
 export const paymentNotify = async (req, res) => {
   const callbackData = req.body
-  const { tran_id, status } = callbackData
-
+  
+  // 💡 FIX 1: Aamarpay-এর ডেটা ফিল্ডের নাম অনুযায়ী ভেরিয়েবল নির্ধারণ
+  const tran_id = callbackData.mer_txnid || callbackData.tran_id; // mer_txnid বা tran_id (অন্য গেটওয়ের জন্য)
+  const status = callbackData.pay_status || callbackData.status; // pay_status বা status (অন্য গেটওয়ের জন্য)
+  
   console.log(`📡 IPN received for transaction: ${tran_id} with status: ${status}`)
 
   try {
-    if (status === "VALID" || status === "VALIDATED") {
+    // 💡 FIX 2: Aamarpay-এর সফল স্ট্যাটাস "Successful" অনুযায়ী চেক করা
+    if (status === "Successful" || status === "VALID" || status === "VALIDATED") {
       const order = await Order.findOne({ transactionId: tran_id })
 
       if (order) {
-        // যদি অর্ডার আগে থেকেই paid ও confirmed থাকে, তবে আপডেট করার দরকার নেই
+        // যদি অর্ডার আগে থেকেই paid ও confirmed থাকে
         if (order.paymentStatus === "paid" && order.status === "confirmed") {
           console.log("⚠️ Order already processed, skipping update.")
           return res.status(200).send("OK - Order previously processed")
@@ -1253,22 +1261,15 @@ export const paymentNotify = async (req, res) => {
 
         console.log("✅ Order payment status updated to PAID:", order.orderNumber)
 
-        // --- FIX: অনলাইন পেমেন্টের পর ইমেইল পাঠানোর লজিক ---
+        // --- ইমেইল পাঠানোর লজিক (যা আগের ধাপে ঠিক করা হয়েছে) ---
         try {
-          // 1. User Model থেকে লগইন করা ইউজারের ডেটা আনা হচ্ছে
           const user = await User.findById(order.userId)
-
-          // 2. ইমেইল নির্ধারণ লজিক: 
-          //   প্রথমে শিপিং অ্যাড্রেসে দেওয়া ইমেইল (যদি থাকে)
-          //   যদি না থাকে, তবে User Model-এ সেভ থাকা ইমেইল
           const toEmail = order.shippingAddress?.email || user?.email
 
           if (toEmail) {
-            // isGuest=false পাঠিয়ে sendOrderEmails ফাংশন কল করা হলো
             await sendOrderEmails(order, toEmail, false)
             console.log("✅ Order confirmation email sent successfully after online payment.")
           } else {
-            // যদি কোনো ইমেইল না পাওয়া যায়, তবে সার্ভারে সতর্কবার্তা দেওয়া
             console.warn(
               "⚠️ Could not send email: Recipient email not found in Shipping Address or User Profile for online order."
             )
@@ -1276,18 +1277,19 @@ export const paymentNotify = async (req, res) => {
         } catch (mailError) {
           console.error("❌ Failed to send confirmation email for online order:", mailError)
         }
-        // --- FIX END ---
+        // --- ইমেইল লজিক শেষ ---
 
         return res.status(200).send("OK - User order updated successfully")
       } else {
         console.log("❌ User order not found for transaction:", tran_id)
         return res.status(404).send("FAILED - Order not found")
       }
-    } else if (status === "FAILED") {
-      // পেমেন্ট ফেইল করলে, শুধুমাত্র paymentStatus আপডেট করা
+    } else if (status === "Failed" || status === "FAILED") {
+      // পেমেন্ট ফেইল স্ট্যাটাস হ্যান্ডেল করা
       const order = await Order.findOne({ transactionId: tran_id })
       if (order) {
         order.paymentStatus = "failed"
+        order.status = "failed" // অর্ডার ফেইল স্ট্যাটাসেও যেতে পারে
         order.paymentGatewayResponse = {
           ...order.paymentGatewayResponse,
           ...callbackData,
@@ -1297,8 +1299,8 @@ export const paymentNotify = async (req, res) => {
         console.log("❌ Order payment status updated to FAILED:", order.orderNumber)
         return res.status(200).send("OK - Order payment failed status updated")
       }
-    } else if (status === "CANCEL") {
-      // পেমেন্ট ক্যানসেল করলে, paymentStatus আপডেট করা
+    } else if (status === "Cancelled" || status === "CANCEL") {
+      // পেমেন্ট ক্যানসেল স্ট্যাটাস হ্যান্ডেল করা
       const order = await Order.findOne({ transactionId: tran_id })
       if (order) {
         order.paymentStatus = "cancelled"
@@ -1313,7 +1315,7 @@ export const paymentNotify = async (req, res) => {
         return res.status(200).send("OK - Order status updated to cancelled")
       }
     } else {
-      // অন্য কোনো অজানা বা পেন্ডিং স্ট্যাটাস
+      // Unhandled বা PENDING স্ট্যাটাস (যেমন Aamarpay-এর verify_status: 'PENDING')
       console.log(`⚠️ Unhandled IPN status: ${status} for transaction: ${tran_id}`)
       return res.status(200).send("OK - Unhandled status")
     }

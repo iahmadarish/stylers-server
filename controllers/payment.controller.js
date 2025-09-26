@@ -351,7 +351,7 @@ export const createCODOrder = async (req, res) => {
       }
 
       // Use cart item prices directly with fallbacks
-      const originalPrice = cartItem.originalPrice || 0
+const originalPrice = cartItem.originalPrice || product.basePrice || product.price || 0
       const discountedPrice = cartItem.discountedPrice || originalPrice
       const quantity = cartItem.quantity || 1
 

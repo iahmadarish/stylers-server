@@ -434,7 +434,7 @@ export const generateOrderConfirmationEmail = (order, isGuest = false, customerN
                     <p>Contact our customer support team for assistance with your order</p>
                     <p>
                         <a href="mailto:support@paarel.com" class="support-contact">support@paarel.com</a> | 
-                        <a href="tel:01842942484" class="support-contact">01842942484</a>
+                        <a href="tel:01624536363" class="support-contact">01624536363</a>
                     </p>
                 </div>
             </div>

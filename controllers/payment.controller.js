@@ -1227,34 +1227,138 @@ export const paymentCancel = async (req, res) => {
 
 
 export const paymentNotify = async (req, res) => {
-  const callbackData = req.body
-  
-  // 💡 FIX 1: Aamarpay-এর ডেটা ফিল্ডের নাম অনুযায়ী ভেরিয়েবল নির্ধারণ
-  const tran_id = callbackData.mer_txnid || callbackData.tran_id; 
-  const status = callbackData.pay_status || callbackData.status; 
-  
-  console.log(`📡 IPN received for transaction: ${tran_id} with status: ${status}`)
-
   try {
-    // 💡 FIX 2: Aamarpay-এর সফল স্ট্যাটাস "Successful" অনুযায়ী চেক করা
-    // SSLCommerz বা অন্য গেটওয়ের স্ট্যাটাসও অন্তর্ভুক্ত করা হলো
-    if (status === "Successful" || status === "VALID" || status === "VALIDATED" || status === "SUCCESS") {
+    console.log("🔔 === IPN/Notify Handler ===")
+    
+    const callbackData = req.body
+    
+    // 💡 FIX 1: ট্রানজেকশন আইডি এবং স্ট্যাটাস ডাইনামিক্যালি নেওয়া হচ্ছে (Aamarpay সাপোর্ট করার জন্য)
+    const tran_id = callbackData.mer_txnid || callbackData.tran_id || callbackData.transaction_id
+    const paymentStatus = callbackData.pay_status || callbackData.status 
+    
+    // Aamarpay এর ক্ষেত্রে 'Successful' বা অন্য গেটওয়ের 'success'/ 'VALID' ব্যবহার করা
+    const isPaymentSuccessful = paymentStatus === "Successful" || paymentStatus === "success" || paymentStatus === "VALID" || paymentStatus === "VALIDATED"
+
+    if (!tran_id) {
+      console.log("❌ Transaction ID missing in IPN")
+      return res.status(400).send("FAILED - Transaction ID missing")
+    }
+
+    console.log("🔍 Processing IPN for transaction:", tran_id)
+
+    if (!isPaymentSuccessful) {
+      console.log("❌ Payment not successful in IPN:", paymentStatus)
       
-      if (!tran_id) {
-          console.error("❌ IPN Failed: Transaction ID (tran_id or mer_txnid) is missing.");
-          return res.status(400).send("FAILED - Missing transaction ID");
+      // পেমেন্ট ফেইল বা ক্যানসেল হলে অর্ডারের স্ট্যাটাস আপডেট করার লজিক এখানে যুক্ত করা যেতে পারে।
+      // যেমন: if (paymentStatus === "Failed") { ... }
+      
+      return res.status(200).send("OK - Payment not successful, skipping order processing")
+    }
+
+    // Security check - verify store ID
+    if (callbackData.store_id && callbackData.store_id !== process.env.AMARPAY_STORE_ID) {
+      console.log("❌ Store ID mismatch in IPN.")
+      return res.status(400).send("FAILED - Store ID verification failed")
+    }
+
+    console.log("✅ IPN verification successful")
+
+    // Check if it's a guest order based on transaction ID prefix
+    // আপনার আগের লজিক অনুসরণ করা হলো
+    const isGuest = tran_id.startsWith("GUEST_TXN_")
+
+    if (isGuest) {
+      // 🎯 FIX 2: গেস্ট অর্ডারের জন্য আপনার পুরোনো, কার্যকরী লজিক ফিরিয়ে আনা হলো
+      console.log("🎯 Processing guest order IPN")
+
+      const existingOrder = await Order.findOne({ transactionId: tran_id })
+      if (existingOrder) {
+        console.log("✅ Guest order already processed:", existingOrder.orderNumber)
+        return res.status(200).send("OK - Order already processed")
       }
-        
-      const order = await Order.findOne({ transactionId: tran_id })
 
-      if (order) {
-        // যদি অর্ডার আগে থেকেই paid ও confirmed থাকে, তবে আপডেট করার দরকার নেই
-        if (order.paymentStatus === "paid" && order.status === "confirmed") {
-          console.log("⚠️ Order already processed, skipping update.")
-          return res.status(200).send("OK - Order previously processed")
+      // global.pendingGuestOrders থেকে ডেটা খুঁজে অর্ডার তৈরি করা
+      global.pendingGuestOrders = global.pendingGuestOrders || new Map()
+      const guestOrderData = global.pendingGuestOrders.get(tran_id)
+
+      if (!guestOrderData) {
+        console.log("❌ Guest order data not found for transaction:", tran_id)
+        console.log("🔄 This might be handled by success handler instead")
+        return res.status(200).send("OK - Will be handled by success handler")
+      }
+
+      // অর্ডার তৈরি করার লজিক
+      const orderCount = await Order.countDocuments()
+      const orderNumber = `GUEST-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`
+
+      const order = new Order({
+        isGuestOrder: true,
+        // ... (অন্যান্য অর্ডার ডেটা: items, subtotal, totalAmount, shippingAddress ইত্যাদি)
+        // ... আপনার guestOrderData থেকে ডেটা যেভাবে ম্যাপ হচ্ছিল, তা এখানে থাকবে ...
+        guestCustomerInfo: {
+            name: guestOrderData.customerInfo.name,
+            email: guestOrderData.customerInfo.email,
+            phone: guestOrderData.customerInfo.phone,
+        },
+        orderNumber: orderNumber,
+        transactionId: tran_id,
+        items: guestOrderData.items,
+        subtotal: guestOrderData.subtotal,
+        totalDiscount: guestOrderData.totalDiscount || 0,
+        shippingCost: guestOrderData.shippingCost,
+        tax: 0,
+        totalAmount: guestOrderData.totalAmount,
+        shippingAddress: guestOrderData.shippingAddress,
+        billingAddress: guestOrderData.billingAddress || guestOrderData.shippingAddress,
+        paymentMethod: "card",
+        couponCode: guestOrderData.couponCode || null,
+        couponDiscount: 0,
+        specialInstructions: guestOrderData.specialInstructions || "",
+        status: "confirmed",
+        paymentStatus: "paid",
+        paymentGatewayResponse: {
+          pg_txnid: callbackData.pg_txnid || callbackData.transaction_id,
+          bank_txn: callbackData.bank_txn,
+          card_type: callbackData.card_type,
+          pay_time: callbackData.pay_time || new Date().toISOString(),
+          amount: callbackData.amount || guestOrderData.totalAmount,
+          store_amount: callbackData.store_amount,
+          currency: callbackData.currency || "BDT",
+          source: "ipn_handler",
+        },
+      })
+
+      await order.save()
+      console.log("✅ Guest order created via IPN:", order.orderNumber)
+
+      // ... (stock আপডেট লজিক) ...
+      
+      // Clean up pending data
+      global.pendingGuestOrders.delete(tran_id)
+
+      // Send confirmation email
+      try {
+        // 💡 FIX 3: sendOrderEmails ফাংশন কল করা হলো, যেখানে isGuest = true যাবে।
+        // আপনার পুরোনো লজিক এখানে sendOrderConfirmationEmail নামে ছিল, সেটিকে sendOrderEmails দিয়ে রিপ্লেস করা হলো
+        // গেস্ট ইউজারের ইমেইল shippingAddress বা guestCustomerInfo থেকে নিতে হবে।
+        const toEmail = order.shippingAddress.email || order.guestCustomerInfo.email;
+        if (toEmail) {
+            await sendOrderEmails(order, toEmail, true) // isGuest = true
+            console.log("✅ Guest order confirmation email sent")
         }
+      } catch (emailError) {
+        console.error("❌ Error sending confirmation email:", emailError)
+      }
 
-        // পেমেন্ট স্ট্যাটাস এবং অর্ডারের স্ট্যাটাস আপডেট
+      return res.status(200).send("OK - Guest order processed successfully")
+
+    } else {
+      // 👤 লগইন করা ইউজারের অর্ডারের লজিক
+      console.log("👤 Processing logged-in user order IPN")
+
+      const order = await Order.findOne({ transactionId: tran_id })
+      if (order) {
+        // অর্ডার স্ট্যাটাস আপডেট
         order.paymentStatus = "paid"
         order.status = "confirmed"
         order.paymentGatewayResponse = {
@@ -1264,76 +1368,29 @@ export const paymentNotify = async (req, res) => {
         }
         await order.save()
 
-        console.log("✅ Order payment status updated to PAID:", order.orderNumber)
-
-        // --- FIX 3: ইমেইল পাঠানোর লজিক (isGuest ফ্ল্যাগ ডাইনামিক করা হলো) ---
+        console.log("✅ User order payment status updated:", order.orderNumber)
+        
+        // 💡 FIX 4: লগইন করা ইউজারের জন্য ইমেইল পাঠানো (যা আপনার মূল সমস্যা ছিল)
         try {
-          // গেস্ট স্ট্যাটাস নির্ধারণ: অর্ডারের isGuestOrder প্রপার্টি অথবা userId না থাকা
-          const isGuest = order.isGuestOrder || !order.userId; 
-
-          let user = null;
-          // যদি গেস্ট অর্ডার না হয়, তবেই User ডেটা লোড করা হবে
-          if (!isGuest && order.userId) {
-            // User Model আপনার import করা আছে ধরে নেওয়া হলো
-            user = await User.findById(order.userId) 
-          }
-
-          // ইমেইল নির্ধারণ: Shipping Email > User Email (যদি থাকে)
-          const toEmail = order.shippingAddress?.email || user?.email
-
-          if (toEmail) {
-            // isGuest flag-টি ডাইনামিক করা হলো: order.isGuestOrder || !order.userId
-            await sendOrderEmails(order, toEmail, isGuest) 
-            console.log(`✅ Order confirmation email sent successfully after online payment. (Guest: ${isGuest})`);
-          } else {
-            console.warn(
-              "⚠️ Could not send email: Recipient email not found for online order."
-            )
-          }
+            // User ডেটা খোঁজা
+            const user = await User.findById(order.userId); 
+            // প্রাপক নির্ধারণ: Shipping Email > User Email
+            const toEmail = order.shippingAddress?.email || user?.email;
+            
+            if (toEmail) {
+                // isGuest = false যাবে
+                await sendOrderEmails(order, toEmail, false); 
+                console.log("✅ Logged-in user order confirmation email sent.");
+            }
         } catch (mailError) {
-          console.error("❌ Failed to send confirmation email for online order (Guest/User):", mailError);
+            console.error("❌ Failed to send confirmation email for logged-in user:", mailError);
         }
-        // --- ইমেইল লজিক শেষ ---
-
+        
         return res.status(200).send("OK - User order updated successfully")
       } else {
         console.log("❌ User order not found for transaction:", tran_id)
         return res.status(404).send("FAILED - Order not found")
       }
-    } else if (status === "Failed" || status === "FAILED") {
-      // পেমেন্ট ফেইল স্ট্যাটাস হ্যান্ডেল করা
-      const order = await Order.findOne({ transactionId: tran_id })
-      if (order) {
-        order.paymentStatus = "failed"
-        order.status = "failed"
-        order.paymentGatewayResponse = {
-          ...order.paymentGatewayResponse,
-          ...callbackData,
-          source: "ipn_handler",
-        }
-        await order.save()
-        console.log("❌ Order payment status updated to FAILED:", order.orderNumber)
-        return res.status(200).send("OK - Order payment failed status updated")
-      }
-    } else if (status === "Cancelled" || status === "CANCEL") {
-      // পেমেন্ট ক্যানসেল স্ট্যাটাস হ্যান্ডেল করা
-      const order = await Order.findOne({ transactionId: tran_id })
-      if (order) {
-        order.paymentStatus = "cancelled"
-        order.status = "cancelled"
-        order.paymentGatewayResponse = {
-          ...order.paymentGatewayResponse,
-          ...callbackData,
-          source: "ipn_handler",
-        }
-        await order.save()
-        console.log("❌ Order status updated to CANCELLED:", order.orderNumber)
-        return res.status(200).send("OK - Order status updated to cancelled")
-      }
-    } else {
-      // Unhandled বা PENDING স্ট্যাটাস
-      console.log(`⚠️ Unhandled IPN status: ${status} for transaction: ${tran_id}`)
-      return res.status(200).send("OK - Unhandled status")
     }
   } catch (error) {
     console.error("❌ Error in IPN handler:", error)

@@ -604,34 +604,70 @@ export const getMyOrders = async (req, res) => {
   }
 }
 
-export const getOrder = async (req, res) => {
-  try {
-    const { id } = req.params
+// export const getOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
 
-    const order = await Order.findById(id).populate("userId", "name email phone")
+//     const order = await Order.findById(id).populate("userId", "name email phone")
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" })
-    }
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
 
-    // Check if user owns this order or is admin (skip for guest orders)
-    if (!order.isGuestOrder && req.user.role !== "admin" && order.userId._id.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Access denied" })
-    }
+//     // Check if user owns this order or is admin (skip for guest orders)
+//     if (!order.isGuestOrder && req.user.role !== "admin" && order.userId._id.toString() !== req.user.id) {
+//       return res.status(403).json({ message: "Access denied" })
+//     }
 
-    res.status(200).json({
-      status: "success",
-      data: { order },
-    })
-  } catch (error) {
-    console.error("Get order error:", error)
-    res.status(500).json({ message: "Internal server error", error: error.message })
-  }
-}
+//     res.status(200).json({
+//       status: "success",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Get order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
 
 
 
 // order.controller.js - updateOrder function
+
+
+
+// order.controller.js ফাইলের মধ্যে
+
+export const getOrder = async (req, res) => {
+  try {
+    const identifier = req.params.id;
+    let order;
+
+    // চেক করুন ইনপুটটি কি MongoDB ObjectId নাকি কাস্টম Order Number 
+    if (identifier.length === 24 && identifier.match(/^[0-9a-fA-F]{24}$/)) {
+        // যদি এটি একটি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন (যেমন, যদি আপনি admin dashboard এ খুঁজেন)
+        order = await Order.findById(identifier);
+    } else {
+        // যদি এটি একটি কাস্টম অর্ডার নম্বর (যেমন: ORD-XXXXX) হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
+        // এই লাইনটিই BSONError ঠিক করবে।
+        order = await Order.findOne({ orderNumber: identifier });
+    }
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // অর্ডার সফলভাবে পাওয়া গেলে
+    res.status(200).json({ data: { order } });
+
+  } catch (error) {
+    console.error("❌ Error fetching order:", error);
+    // BSONError আর হবে না, কিন্তু অন্য কোনো এরর হলে সেটা লগ হবে।
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params

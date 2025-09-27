@@ -819,7 +819,7 @@ productSchema.statics.updateDiscountPrices = async function () {
 
 
 // ✅ Updated indexes
-productSchema.index({ slug: 1 })
+// productSchema.index({ slug: 1 })
 productSchema.index({ parentCategoryId: 1, subCategoryId: 1 })
 productSchema.index({ isFeatured: 1 })
 productSchema.index({ isActive: 1 })

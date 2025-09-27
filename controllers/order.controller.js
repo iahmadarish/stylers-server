@@ -156,11 +156,6 @@ export const createOrder = async (req, res) => {
   }
 };
 
-
-
-
-
-
 // NEW: Create guest order - FIXED VERSION
 export const createGuestOrder = async (req, res) => {
   try {
@@ -682,10 +677,10 @@ export const updateOrder = async (req, res) => {
       return res.status(404).json({ message: "Order not found" })
     }
 
-    // ✅ Pathao তে Order Create শুধু যখন shipped করা হবে
+    
     if (status === "shipped" && !order.pathaoOrderId) {
       try {
-        console.log('🔄 Creating Pathao order for:', order.orderNumber);
+        console.log('Creating Pathao order for:', order.orderNumber);
         
         const pathaoRes = await createPathaoOrder(order)
 
@@ -694,14 +689,14 @@ export const updateOrder = async (req, res) => {
         order.pathaoStatus = pathaoRes.data.status
 
         await order.save()
-        console.log("✅ Pathao order created successfully:", pathaoRes.data)
+        console.log("Pathao order created successfully:", pathaoRes.data)
         
       } catch (err) {
         console.error("❌ Pathao order creation failed:", err.message)
         
         // Sandbox-specific error handling
         if (PATHAO_BASE_URL.includes('sandbox')) {
-          console.log('⚠️  Sandbox environment - creating mock Pathao data');
+          console.log('Sandbox environment - creating mock Pathao data');
           
           // Mock data for sandbox testing
           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
@@ -958,7 +953,7 @@ export const getSalesData = async (req, res) => {
   }
 };
 
-// অর্ডার স্ট্যাটাস ডেটা
+
 // export const getOrderStatusData = async (req, res) => {
 //   try {
 //     const { range = 'all' } = req.query;
@@ -1036,29 +1031,29 @@ export const getOrderStatusData = async (req, res) => {
 
     const dateFilter = {};
     if (range !== 'all') {
-      const now = new Date(); // এই ডেট অবজেক্টটি রেঞ্জ ক্যালকুলেশনের আগে তৈরি করা হলো
+      const now = new Date(); 
       let startDate;
 
       switch (range) {
         case '7days':
-          // ✅ সঠিক সমাধান: নতুন Date() অবজেক্টের উপর setDate চালানো হচ্ছে
+         
           startDate = new Date(now.setDate(now.getDate() - 7));
           break;
         case '30days':
-          // ✅ সঠিক সমাধান
+         
           startDate = new Date(now.setDate(now.getDate() - 30));
           break;
         case '6months':
-          // ✅ সঠিক সমাধান
+        
           startDate = new Date(now.setMonth(now.getMonth() - 6));
           break;
         default:
-          // যদি রেঞ্জ ম্যাচ না করে তবে কোনো ফিল্টার নয়
+         
           startDate = null; 
           break;
       }
       
-      // 💡 Aggregation এর জন্য dateFilter এ createdAt ফিল্ডের সাথে $gte যোগ করা
+    
       if (startDate) {
         dateFilter.createdAt = { $gte: startDate };
       }
@@ -1098,7 +1093,7 @@ export const getOrderStatusData = async (req, res) => {
 
     const orderStatusData = orderStatusCounts.map(item => ({
       name: statusLabels[item._id] || item._id,
-      // শতাংশ গণনা: totalOrders 0 হলে 0 রিটার্ন করবে, নতুবা রাউন্ডেড পার্সেন্টেজ
+   
       value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0, 
       color: statusColors[item._id] || '#6B7280'
     }));
@@ -1109,7 +1104,7 @@ export const getOrderStatusData = async (req, res) => {
     });
 
   } catch (error) {
-    // 📢 এরর লগিং: যাতে 500 এররের কারণ পরবর্তীতে জানা যায়
+   
     console.error('❌ Error in getOrderStatusData:', error); 
     res.status(500).json({
       status: 'error',

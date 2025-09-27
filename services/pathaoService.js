@@ -5,22 +5,22 @@ const PATHAO_CLIENT_ID = process.env.PATHAO_CLIENT_ID;
 const PATHAO_CLIENT_SECRET = process.env.PATHAO_CLIENT_SECRET;
 const PATHAO_USERNAME = process.env.PATHAO_USERNAME;
 const PATHAO_PASSWORD = process.env.PATHAO_PASSWORD;
-const PATHAO_BASE_URL = process.env.PATHAO_BASE_URL;
+const PATHAO_BASE_URL = "https://api-hermes.pathao.com";
 const PATHAO_STORE_ID = parseInt(process.env.PATHAO_STORE_ID);
 
-// টোকেন ক্যাশে রাখার জন্য
+
 let accessToken = null;
 let tokenExpiry = null;
 
-// টোকেন পাওয়ার ফাংশন - SANDBOX COMPATIBLE
+
 const getPathaoToken = async () => {
   try {
-    // যদি টোকেন এখনও valid থাকে
+    
     if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
       return accessToken;
     }
 
-    console.log('🔐 Getting Pathao token from:', PATHAO_BASE_URL);
+    console.log('Getting Pathao token from:', PATHAO_BASE_URL);
     
     const response = await axios.post(`${PATHAO_BASE_URL}/aladdin/api/v1/issue-token`, {
       client_id: PATHAO_CLIENT_ID,
@@ -31,25 +31,25 @@ const getPathaoToken = async () => {
     });
 
     accessToken = response.data.access_token;
-    // টোকেন 1 ঘন্টা valid থাকে (3600 সেকেন্ড)
+    
     tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
 
-    console.log('✅ Pathao token obtained successfully');
+    console.log('Pathao token obtained successfully');
     return accessToken;
   } catch (error) {
-    console.error('❌ Pathao token error:', error.response?.data || error.message);
+    console.error('Pathao token error:', error.response?.data || error.message);
     throw new Error('Failed to get Pathao token');
   }
 };
 
-// Pathao এ অর্ডার তৈরি করার ফাংশন - SANDBOX COMPATIBLE
+
 export const createPathaoOrder = async (order) => {
   try {
-    console.log('🚀 Creating Pathao order for:', order.orderNumber);
+    console.log('Creating Pathao order for:', order.orderNumber);
     
     const token = await getPathaoToken();
 
-    // Sandbox environment এর জন্য simplified location data
+    // Sandbox environment simplified location data
     const pathaoOrderData = {
       store_id: PATHAO_STORE_ID,
       merchant_order_id: order.orderNumber,
@@ -70,7 +70,7 @@ export const createPathaoOrder = async (order) => {
       special_instruction: order.specialInstructions || '',
     };
 
-    console.log('📦 Pathao order data:', JSON.stringify(pathaoOrderData, null, 2));
+    console.log('Pathao order data:', JSON.stringify(pathaoOrderData, null, 2));
 
     const response = await axios.post(
       `${PATHAO_BASE_URL}/aladdin/api/v1/orders`,
@@ -85,10 +85,10 @@ export const createPathaoOrder = async (order) => {
       }
     );
 
-    console.log('✅ Pathao order created successfully:', response.data);
+    console.log('Pathao order created successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('❌ Pathao order creation error:', error.response?.data || error.message);
+    console.error('Pathao order creation error:', error.response?.data || error.message);
     
     // More detailed error logging
     if (error.response) {
@@ -108,12 +108,12 @@ export const createPathaoOrder = async (order) => {
 // Debugging function for sandbox
 export const testPathaoConnection = async () => {
   try {
-    console.log('🧪 Testing Pathao Sandbox Connection...');
+    console.log('Testing Pathao Sandbox Connection...');
     console.log('Base URL:', PATHAO_BASE_URL);
     console.log('Store ID:', PATHAO_STORE_ID);
     
     const token = await getPathaoToken();
-    console.log('✅ Token obtained successfully');
+    console.log('Token obtained successfully');
     
     // Try to get store list to verify store_id
     try {
@@ -126,14 +126,14 @@ export const testPathaoConnection = async () => {
           }
         }
       );
-      console.log('📋 Available stores:', response.data);
+      console.log('Available stores:', response.data);
     } catch (storeError) {
-      console.log('ℹ️ Store list not available in sandbox, continuing...');
+      console.log('Store list not available in sandbox, continuing...');
     }
     
     return { success: true, message: 'Connection test successful' };
   } catch (error) {
-    console.error('❌ Connection test failed:', error.message);
+    console.error('Connection test failed:', error.message);
     return { success: false, error: error.message };
   }
 };

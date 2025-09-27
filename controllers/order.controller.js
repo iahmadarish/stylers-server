@@ -639,29 +639,28 @@ export const getMyOrders = async (req, res) => {
 
 export const getOrder = async (req, res) => {
   try {
-    const identifier = req.params.id;
+    const identifier = req.params.id; // এটি ORD-XXXXX বা 24-char ObjectId হতে পারে
     let order;
 
-    // চেক করুন ইনপুটটি কি MongoDB ObjectId নাকি কাস্টম Order Number 
+    // MongoDB ObjectId ভ্যালিডেশন চেক করুন (24 হেক্স ক্যারেক্টার)
     if (identifier.length === 24 && identifier.match(/^[0-9a-fA-F]{24}$/)) {
-        // যদি এটি একটি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন (যেমন, যদি আপনি admin dashboard এ খুঁজেন)
+        // যদি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন
         order = await Order.findById(identifier);
     } else {
-        // যদি এটি একটি কাস্টম অর্ডার নম্বর (যেমন: ORD-XXXXX) হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
-        // এই লাইনটিই BSONError ঠিক করবে।
+        // যদি কাস্টম অর্ডার নম্বর হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
         order = await Order.findOne({ orderNumber: identifier });
     }
 
     if (!order) {
+      // যদি ObjectId বা orderNumber কোনোটি দিয়েই না পাওয়া যায়
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // অর্ডার সফলভাবে পাওয়া গেলে
     res.status(200).json({ data: { order } });
 
   } catch (error) {
-    console.error("❌ Error fetching order:", error);
-    // BSONError আর হবে না, কিন্তু অন্য কোনো এরর হলে সেটা লগ হবে।
+    // console.error(error) যোগ করুন যাতে কোনো অপ্রত্যাশিত এরর লগ হয়
+    console.error("❌ Error fetching order:", error); 
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -960,23 +959,108 @@ export const getSalesData = async (req, res) => {
 };
 
 // অর্ডার স্ট্যাটাস ডেটা
+// export const getOrderStatusData = async (req, res) => {
+//   try {
+//     const { range = 'all' } = req.query;
+
+//     const dateFilter = {};
+//     if (range !== 'all') {
+//       const now = new Date();
+//       switch (range) {
+//         case '7days':
+//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
+//           break;
+//         case '30days':
+//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
+//           break;
+//         case '6months':
+//           dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
+//           break;
+//       }
+//     }
+
+//     const orderStatusCounts = await Order.aggregate([
+//       {
+//         $match: dateFilter
+//       },
+//       {
+//         $group: {
+//           _id: '$status',
+//           count: { $sum: 1 }
+//         }
+//       }
+//     ]);
+
+//     const totalOrders = orderStatusCounts.reduce((sum, item) => sum + item.count, 0);
+
+//     const statusColors = {
+//       'confirmed': '#10B981',
+//       'processing': '#3B82F6',
+//       'shipped': '#8B5CF6',
+//       'delivered': '#059669',
+//       'pending': '#F59E0B',
+//       'cancelled': '#EF4444'
+//     };
+
+//     const statusLabels = {
+//       'confirmed': 'Confirmed',
+//       'processing': 'Processing',
+//       'shipped': 'Shipped',
+//       'delivered': 'Delivered',
+//       'pending': 'Pending',
+//       'cancelled': 'Cancelled'
+//     };
+
+//     const orderStatusData = orderStatusCounts.map(item => ({
+//       name: statusLabels[item._id] || item._id,
+//       value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
+//       color: statusColors[item._id] || '#6B7280'
+//     }));
+
+//     res.json({
+//       status: 'success',
+//       data: orderStatusData
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       status: 'error',
+//       message: error.message
+//     });
+//   }
+// };
+
 export const getOrderStatusData = async (req, res) => {
   try {
     const { range = 'all' } = req.query;
 
     const dateFilter = {};
     if (range !== 'all') {
-      const now = new Date();
+      const now = new Date(); // এই ডেট অবজেক্টটি রেঞ্জ ক্যালকুলেশনের আগে তৈরি করা হলো
+      let startDate;
+
       switch (range) {
         case '7days':
-          dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
+          // ✅ সঠিক সমাধান: নতুন Date() অবজেক্টের উপর setDate চালানো হচ্ছে
+          startDate = new Date(now.setDate(now.getDate() - 7));
           break;
         case '30days':
-          dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
+          // ✅ সঠিক সমাধান
+          startDate = new Date(now.setDate(now.getDate() - 30));
           break;
         case '6months':
-          dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
+          // ✅ সঠিক সমাধান
+          startDate = new Date(now.setMonth(now.getMonth() - 6));
           break;
+        default:
+          // যদি রেঞ্জ ম্যাচ না করে তবে কোনো ফিল্টার নয়
+          startDate = null; 
+          break;
+      }
+      
+      // 💡 Aggregation এর জন্য dateFilter এ createdAt ফিল্ডের সাথে $gte যোগ করা
+      if (startDate) {
+        dateFilter.createdAt = { $gte: startDate };
       }
     }
 
@@ -1014,7 +1098,8 @@ export const getOrderStatusData = async (req, res) => {
 
     const orderStatusData = orderStatusCounts.map(item => ({
       name: statusLabels[item._id] || item._id,
-      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
+      // শতাংশ গণনা: totalOrders 0 হলে 0 রিটার্ন করবে, নতুবা রাউন্ডেড পার্সেন্টেজ
+      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0, 
       color: statusColors[item._id] || '#6B7280'
     }));
 
@@ -1024,14 +1109,14 @@ export const getOrderStatusData = async (req, res) => {
     });
 
   } catch (error) {
+    // 📢 এরর লগিং: যাতে 500 এররের কারণ পরবর্তীতে জানা যায়
+    console.error('❌ Error in getOrderStatusData:', error); 
     res.status(500).json({
       status: 'error',
-      message: error.message
+      message: error.message || 'Internal server error'
     });
   }
 };
-
-
 
 // Legacy functions for backward compatibility
 export const getUserOrders = getMyOrders

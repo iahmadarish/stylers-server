@@ -1,7 +1,7 @@
 import Cart from "../models/Cart.js"
 import Product from "../models/Product.js"
 
-// ✅ Add item to cart with proper variant handling
+
 // ✅ Add item to cart with proper variant handling
 export const addToCart = async (req, res) => {
   try {
@@ -177,6 +177,7 @@ export const addToCart = async (req, res) => {
       variantId: variantId || null,
       selectedVariant,
       quantity: Number(quantity),
+      originalPrice: finalBasePrice,
       basePrice: finalBasePrice,
       discountedPrice: finalDiscountedPrice,
       discountPercentage: discountActive ? finalDiscountPercentage : 0,

@@ -618,7 +618,7 @@ export const createGuestOrder = async (req, res) => {
       billingAddress: finalBillingAddress,
       paymentMethod,
       specialInstructions,
-      status: "confirmed",
+      status: "pending", // confirm can be changed to pending
       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
     });
 

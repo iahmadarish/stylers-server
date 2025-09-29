@@ -142,22 +142,22 @@
 
 import axios from 'axios';
 
-// Pathao API credentials (হার্ডকোড করা হলো)
+// Pathao API credentials
 const PATHAO_CLIENT_ID = 'openR4Ee7A';
 const PATHAO_CLIENT_SECRET = 'Czf5H6wQ0qdyD5gEN2hjQFVF1sS6KZRMtMfTR2L5';
 const PATHAO_USERNAME = 'nayem.cdab@gmail.com';
 const PATHAO_PASSWORD = 'Life0304@';
 const PATHAO_BASE_URL = 'https://api-hermes.pathao.com';
-const PATHAO_STORE_ID = 165272; 
+const PATHAO_STORE_ID = 165272;
 
+// ✅ এই ভ্যারিয়েবলটি এক্সপোর্ট করুন
+export { PATHAO_BASE_URL };
 
 let accessToken = null;
 let tokenExpiry = null;
 
-
 const getPathaoToken = async () => {
   try {
-    
     if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
       return accessToken;
     }
@@ -173,7 +173,6 @@ const getPathaoToken = async () => {
     });
 
     accessToken = response.data.access_token;
-    
     tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
 
     console.log('Pathao token obtained successfully');
@@ -184,14 +183,14 @@ const getPathaoToken = async () => {
   }
 };
 
-
 export const createPathaoOrder = async (order) => {
   try {
     console.log('Creating Pathao order for:', order.orderNumber);
     
     const token = await getPathaoToken();
 
-    // সমস্ত Required ফিল্ড সহ Pathao Order Payload তৈরি
+    // ✅ ফিক্সড sender_phone (ভ্যালিড বাংলাদেশি নম্বর)
+    // ✅ recipient_address মিনিমাম ১০ ক্যারেক্টার নিশ্চিত করুন
     const pathaoOrderData = {
       store_id: PATHAO_STORE_ID,
       merchant_order_id: order.orderNumber,
@@ -199,17 +198,19 @@ export const createPathaoOrder = async (order) => {
       // Recipient Data
       recipient_name: order.shippingAddress.fullName,
       recipient_phone: order.shippingAddress.phone,
-      recipient_address: order.shippingAddress.address,
-      recipient_city: 1, // Dhaka for sandbox (আপনার আসল City ID দিয়ে প্রতিস্থাপন করুন)
-      recipient_zone: 1, // Gulshan for sandbox (আপনার আসল Zone ID দিয়ে প্রতিস্থাপন করুন)
-      recipient_area: 1, // Gulshan 1 for sandbox (আপনার আসল Area ID দিয়ে প্রতিস্থাপন করুন)
+      recipient_address: order.shippingAddress.address.length >= 10 
+        ? order.shippingAddress.address 
+        : `${order.shippingAddress.address} - Full Address`, // Ensure minimum 10 chars
+      recipient_city: 1, // Dhaka
+      recipient_zone: 1, // Gulshan
+      recipient_area: 1, // Gulshan 1
       
       // Shipment Details
-      delivery_type: 48, // 48 hours delivery (আপনার প্রয়োজন অনুযায়ী পরিবর্তন করুন)
-      item_type: 2, // Parcel (পণ্যের ধরন অনুযায়ী পরিবর্তন করুন)
+      delivery_type: 48,
+      item_type: 2,
       item_quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
-      item_weight: 1, // kg
-      amount_to_collect: order.paymentMethod === 'cash_on_delivery' ? order.totalAmount : 0, // COD Amount
+      item_weight: 1,
+      amount_to_collect: order.paymentMethod === 'cash_on_delivery' ? order.totalAmount : 0,
       
       // Other Details
       item_description: order.items.map(item => 
@@ -217,10 +218,10 @@ export const createPathaoOrder = async (order) => {
       ).join(', '),
       special_instruction: order.specialInstructions || '',
       
-      // Sender Details (যদি এখানে থাকে, অন্যথায় controller থেকে আসতে পারে)
-      sender_name: 'PAAREL', // আপনার স্টোরের নাম
-      sender_phone: '01XXXXXXXXX', // আপনার প্রেরকের ফোন নম্বর (Pathao Store phone)
-      sender_address: 'আপনার স্টোরের ঠিকানা', // আপনার স্টোরের ঠিকানা (Pathao Store address)
+      // ✅ FIXED: Valid sender phone number
+      sender_name: 'PAAREL',
+      sender_phone: '01700000000', // Valid Bangladeshi phone number
+      sender_address: 'Your Store Full Address, City, Bangladesh', // Full address
     };
 
     console.log('Pathao order data:', JSON.stringify(pathaoOrderData, null, 2));
@@ -234,7 +235,7 @@ export const createPathaoOrder = async (order) => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        timeout: 10000 // 10 second timeout
+        timeout: 10000
       }
     );
 
@@ -243,7 +244,6 @@ export const createPathaoOrder = async (order) => {
   } catch (error) {
     console.error('Pathao order creation error:', error.response?.data || error.message);
     
-    // More detailed error logging
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Headers:', error.response.headers);

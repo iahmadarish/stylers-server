@@ -4,6 +4,7 @@ import Product from "../models/Product.js"
 import { sendOrderEmails } from "../services/emailService.js"
 import User from "../models/User.js"
 import { createPathaoOrder } from "../services/pathaoService.js";
+import { PATHAO_BASE_URL } from "../services/pathaoService.js";
 
 
 // Existing createOrder function (unchanged for logged-in users)
@@ -414,7 +415,7 @@ export const createGuestOrder = async (req, res) => {
       billingAddress,
       items,
       paymentMethod,
-      shippingCost = 0, // ডিফল্ট 0, কিন্তু ডায়নামিকভাবে ক্যালকুলেট করব
+      shippingCost = 0, 
       specialInstructions = "",
     } = req.body;
 
@@ -602,7 +603,7 @@ export const createGuestOrder = async (req, res) => {
       items: orderItems,
       subtotal: calculatedSubtotal,
       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
-      shippingCost: dynamicShippingCost, // ✅ ডায়নামিক শিপিং খরচ ব্যবহার
+      shippingCost: dynamicShippingCost, // dynamic shipping cost added to filed
       totalAmount: calculatedTotalAmount,
       shippingAddress: {
         fullName: shippingAddress.fullName || customerInfo.name,
@@ -925,6 +926,70 @@ export const getOrder = async (req, res) => {
 
 
 
+// export const updateOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
+//     const { status, paymentStatus } = req.body
+
+//     const updateData = {}
+//     if (status) updateData.status = status
+//     if (paymentStatus) updateData.paymentStatus = paymentStatus
+
+//     const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
+
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
+
+    
+//     if (status === "shipped" && !order.pathaoOrderId) {
+//       try {
+//         console.log('Creating Pathao order for:', order.orderNumber);
+        
+//         const pathaoRes = await createPathaoOrder(order)
+
+//         order.pathaoTrackingId = pathaoRes.data.consignment_id
+//         order.pathaoOrderId = pathaoRes.data.order_id
+//         order.pathaoStatus = pathaoRes.data.status
+
+//         await order.save()
+//         console.log("Pathao order created successfully:", pathaoRes.data)
+        
+//       } catch (err) {
+//         console.error("❌ Pathao order creation failed:", err.message)
+        
+//         // Sandbox-specific error handling
+//         if (PATHAO_BASE_URL.includes('sandbox')) {
+//           console.log('Sandbox environment - creating mock Pathao data');
+          
+//           // Mock data for sandbox testing
+//           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
+//           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
+//           order.pathaoStatus = 'pending';
+//           order.pathaoSandboxMode = true;
+          
+//           await order.save();
+//           console.log('✅ Mock Pathao data created for sandbox testing');
+//         } else {
+//           // Production error handling
+//           order.pathaoError = err.message;
+//           await order.save();
+//         }
+//       }
+//     }
+
+//     res.status(200).json({
+//       status: "success",
+//       message: "Order updated successfully",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Update order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
+
+
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params
@@ -957,7 +1022,7 @@ export const updateOrder = async (req, res) => {
       } catch (err) {
         console.error("❌ Pathao order creation failed:", err.message)
         
-        // Sandbox-specific error handling
+        // ✅ FIXED: PATHAO_BASE_URL is now defined
         if (PATHAO_BASE_URL.includes('sandbox')) {
           console.log('Sandbox environment - creating mock Pathao data');
           
@@ -987,6 +1052,7 @@ export const updateOrder = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message })
   }
 }
+
 
 
 export const cancelOrder = async (req, res) => {

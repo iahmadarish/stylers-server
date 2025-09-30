@@ -4,6 +4,7 @@ import Product from "../models/Product.js"
 import { sendOrderEmails } from "../services/emailService.js"
 import User from "../models/User.js"
 import { createPathaoOrder } from "../services/pathaoService.js";
+import { PATHAO_BASE_URL } from "../services/pathaoService.js";
 
 
 // Existing createOrder function (unchanged for logged-in users)
@@ -156,12 +157,254 @@ export const createOrder = async (req, res) => {
   }
 };
 
-
-
-
-
-
 // NEW: Create guest order - FIXED VERSION
+// export const createGuestOrder = async (req, res) => {
+//   try {
+//     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
+
+//     const {
+//       customerInfo,
+//       shippingAddress,
+//       billingAddress,
+//       items,
+//       paymentMethod,
+//       shippingCost = 0,
+//       specialInstructions = "",
+//     } = req.body;
+
+//     // Detailed validation with specific error messages
+//     if (!customerInfo) {
+//       return res.status(400).json({ message: "Customer information is required" });
+//     }
+
+//     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+//       return res.status(400).json({
+//         message: "Customer name, email, and phone are required",
+//         missing: {
+//           name: !customerInfo.name,
+//           email: !customerInfo.email,
+//           phone: !customerInfo.phone,
+//         },
+//       });
+//     }
+
+//     if (!shippingAddress) {
+//       return res.status(400).json({ message: "Shipping address is required" });
+//     }
+
+//     if (!shippingAddress.address || !shippingAddress.city) {
+//       return res.status(400).json({
+//         message: "Shipping address and city are required",
+//         missing: {
+//           address: !shippingAddress.address,
+//           city: !shippingAddress.city,
+//         },
+//       });
+//     }
+
+//     if (!items || !Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({ message: "Order items are required" });
+//     }
+
+//     if (!paymentMethod) {
+//       return res.status(400).json({ message: "Payment method is required" });
+//     }
+
+//     // Prepare order items with detailed pricing
+//     const orderItems = [];
+//     let calculatedSubtotal = 0;
+//     let calculatedTotalDiscount = 0;
+
+//     for (const item of items) {
+//       // Fetch product details to ensure data integrity
+//       const product = await Product.findById(item.productId);
+//       if (!product) {
+//         return res.status(400).json({ message: `Product not found: ${item.productId}` });
+//       }
+
+//       // Get variant details if exists
+//       let variantDetails = null;
+//       if (item.variantId) {
+//         variantDetails = product.variants.id(item.variantId);
+//       }
+
+//       // Get color variant details if exists
+//       let colorVariantDetails = null;
+//       if (item.colorVariantId) {
+//         // Fix: Check if colorVariants exists and is an array before calling methods on it
+//         if (product.colorVariants && Array.isArray(product.colorVariants)) {
+//           if (item.colorVariantId.startsWith('#')) {
+//             // It's a color code, find by colorCode
+//             colorVariantDetails = product.colorVariants.find(
+//               cv => cv && cv.colorCode === item.colorVariantId
+//             );
+//           } else {
+//             // It's an ObjectId, try to find by ID
+//             try {
+//               colorVariantDetails = product.colorVariants.id(item.colorVariantId);
+//             } catch (error) {
+//               console.log("Error finding color variant by ID:", error.message);
+//               // Fallback: try to find by colorCode if ID search fails
+//               colorVariantDetails = product.colorVariants.find(
+//                 cv => cv && cv.colorCode === item.colorVariantId
+//               );
+//             }
+//           }
+//         } else {
+//           console.log("Warning: Product colorVariants is not an array or is undefined");
+//         }
+//       }
+
+//       const totalOriginalPrice = item.originalPrice * item.quantity;
+//       const totalDiscountedPrice = item.discountedPrice * item.quantity;
+//       const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+//       const orderItem = {
+//         productId: product._id,
+//         productTitle: item.productTitle || product.title,
+//         productImage:
+//           item.productImage ||
+//           (colorVariantDetails && colorVariantDetails.images && colorVariantDetails.images[0]) ||
+//           (product.images && product.images[0]) ||
+//           "/placeholder.svg?height=200&width=200",
+//         variantId: item.variantId,
+//         variantDetails: variantDetails
+//           ? {
+//             size: variantDetails.size,
+//             dimension: variantDetails.dimension,
+//           }
+//           : null,
+//         // FIX: Only set colorVariantId if it's a valid ObjectId, not color code
+//         colorVariantId: item.colorVariantId && item.colorVariantId.startsWith('#') ? null : item.colorVariantId,
+//         colorVariantDetails: colorVariantDetails
+//           ? {
+//             name: colorVariantDetails.name,
+//             code: colorVariantDetails.code,
+//           }
+//           : null,
+//         quantity: item.quantity,
+//         originalPrice: item.originalPrice,
+//         discountedPrice: item.discountedPrice,
+//         discountPercentage: item.discountPercentage || 0,
+//         totalOriginalPrice,
+//         totalDiscountedPrice,
+//         discountAmount: Math.max(0, itemDiscountAmount),
+//       };
+
+//       orderItems.push(orderItem);
+//       calculatedSubtotal += totalDiscountedPrice;
+//       calculatedTotalDiscount += itemDiscountAmount;
+//     }
+
+//     const calculatedTotalAmount = calculatedSubtotal + shippingCost;
+
+//     // Generate unique order number for guest
+//     const orderNumber = `GUEST-${Date.now()}-${Math.floor(Math.random() * 10000)
+//       .toString()
+//       .padStart(4, "0")}`;
+
+//     // Prepare billing address - handle both cases
+//     const finalBillingAddress =
+//       billingAddress?.sameAsShipping !== false
+//         ? {
+//           fullName: shippingAddress.fullName || customerInfo.name,
+//           phone: shippingAddress.phone || customerInfo.phone,
+//           email: shippingAddress.email || customerInfo.email,
+//           address: shippingAddress.address,
+//           city: shippingAddress.city,
+//           state: shippingAddress.state || "",
+//           zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
+//           country: shippingAddress.country || "Bangladesh",
+//           sameAsShipping: true,
+//         }
+//         : {
+//           fullName: billingAddress.fullName || customerInfo.name,
+//           phone: billingAddress.phone || customerInfo.phone,
+//           email: billingAddress.email || customerInfo.email,
+//           address: billingAddress.address,
+//           city: billingAddress.city,
+//           state: billingAddress.state || "",
+//           zipCode: billingAddress.zipCode || billingAddress.postalCode || "",
+//           country: billingAddress.country || "Bangladesh",
+//           sameAsShipping: false,
+//         };
+
+//     // Create guest order
+//     const order = new Order({
+//       isGuestOrder: true,
+//       guestCustomerInfo: {
+//         name: customerInfo.name,
+//         email: customerInfo.email,
+//         phone: customerInfo.phone,
+//       },
+//       orderNumber,
+//       items: orderItems,
+//       subtotal: calculatedSubtotal,
+//       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
+//       shippingCost,
+//       totalAmount: calculatedTotalAmount,
+//       shippingAddress: {
+//         fullName: shippingAddress.fullName || customerInfo.name,
+//         phone: shippingAddress.phone || customerInfo.phone,
+//         email: shippingAddress.email || customerInfo.email,
+//         address: shippingAddress.address,
+//         city: shippingAddress.city,
+//         state: shippingAddress.state || "",
+//         zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
+//         country: shippingAddress.country || "Bangladesh",
+//       },
+//       billingAddress: finalBillingAddress,
+//       paymentMethod,
+//       specialInstructions,
+//       status: "confirmed",
+//       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
+//     });
+
+//     console.log("Creating order with data:", JSON.stringify(order.toObject(), null, 2));
+
+//     await order.save();
+
+//     // Send confirmation email using the new helper function
+//     try {
+//       const guestEmail = order.guestCustomerInfo.email;
+//       const emailResult = await sendOrderEmails(order, order.guestCustomerInfo.email, true); // true = guest order
+
+//       if (emailResult.success) {
+//         console.log('✅ Guest confirmation email sent successfully');
+//       } else {
+//         console.error('❌ Failed to send guest email:', emailResult.error);
+//       }
+//     } catch (emailError) {
+//       console.error('❌ Guest email sending error:', emailError.message);
+//     }
+
+//     // Update product stock
+//     await updateProductStock(orderItems);
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Guest order created successfully",
+//       data: {
+//         order,
+//         orderNumber: order.orderNumber,
+//         trackingInfo: {
+//           orderNumber: order.orderNumber,
+//           email: customerInfo.email,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Create guest order error:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+//     });
+//   }
+// };
+
+
+// order.controller.js - createGuestOrder ফাংশন আপডেট করুন
 export const createGuestOrder = async (req, res) => {
   try {
     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
@@ -172,7 +415,7 @@ export const createGuestOrder = async (req, res) => {
       billingAddress,
       items,
       paymentMethod,
-      shippingCost = 0,
+      shippingCost = 0, 
       specialInstructions = "",
     } = req.body;
 
@@ -300,7 +543,22 @@ export const createGuestOrder = async (req, res) => {
       calculatedTotalDiscount += itemDiscountAmount;
     }
 
-    const calculatedTotalAmount = calculatedSubtotal + shippingCost;
+    // ✅ NEW: Calculate shipping cost dynamically like logged-in users
+    const calculateShippingCost = (subtotal, city) => {
+      if (subtotal >= 4000) return 0;
+      const isDhaka = city && city.toLowerCase().includes("dhaka");
+      return isDhaka ? 70 : 130;
+    };
+
+    const dynamicShippingCost = calculateShippingCost(calculatedSubtotal, shippingAddress.city);
+    const calculatedTotalAmount = calculatedSubtotal + dynamicShippingCost;
+
+    console.log("Shipping cost calculation:", {
+      subtotal: calculatedSubtotal,
+      city: shippingAddress.city,
+      shippingCost: dynamicShippingCost,
+      totalAmount: calculatedTotalAmount
+    });
 
     // Generate unique order number for guest
     const orderNumber = `GUEST-${Date.now()}-${Math.floor(Math.random() * 10000)
@@ -345,7 +603,7 @@ export const createGuestOrder = async (req, res) => {
       items: orderItems,
       subtotal: calculatedSubtotal,
       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
-      shippingCost,
+      shippingCost: dynamicShippingCost, // dynamic shipping cost added to filed
       totalAmount: calculatedTotalAmount,
       shippingAddress: {
         fullName: shippingAddress.fullName || customerInfo.name,
@@ -360,7 +618,7 @@ export const createGuestOrder = async (req, res) => {
       billingAddress: finalBillingAddress,
       paymentMethod,
       specialInstructions,
-      status: "confirmed",
+      status: "pending", // confirm can be changed to pending
       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
     });
 
@@ -406,6 +664,7 @@ export const createGuestOrder = async (req, res) => {
     });
   }
 };
+
 
 // Helper function to update product stock
 const updateProductStock = async (orderItems) => {
@@ -604,34 +863,133 @@ export const getMyOrders = async (req, res) => {
   }
 }
 
-export const getOrder = async (req, res) => {
-  try {
-    const { id } = req.params
+// export const getOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
 
-    const order = await Order.findById(id).populate("userId", "name email phone")
+//     const order = await Order.findById(id).populate("userId", "name email phone")
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" })
-    }
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
 
-    // Check if user owns this order or is admin (skip for guest orders)
-    if (!order.isGuestOrder && req.user.role !== "admin" && order.userId._id.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Access denied" })
-    }
+//     // Check if user owns this order or is admin (skip for guest orders)
+//     if (!order.isGuestOrder && req.user.role !== "admin" && order.userId._id.toString() !== req.user.id) {
+//       return res.status(403).json({ message: "Access denied" })
+//     }
 
-    res.status(200).json({
-      status: "success",
-      data: { order },
-    })
-  } catch (error) {
-    console.error("Get order error:", error)
-    res.status(500).json({ message: "Internal server error", error: error.message })
-  }
-}
+//     res.status(200).json({
+//       status: "success",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Get order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
 
 
 
 // order.controller.js - updateOrder function
+
+
+
+// order.controller.js ফাইলের মধ্যে
+
+export const getOrder = async (req, res) => {
+  try {
+    const identifier = req.params.id; // এটি ORD-XXXXX বা 24-char ObjectId হতে পারে
+    let order;
+
+    // MongoDB ObjectId ভ্যালিডেশন চেক করুন (24 হেক্স ক্যারেক্টার)
+    if (identifier.length === 24 && identifier.match(/^[0-9a-fA-F]{24}$/)) {
+        // যদি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন
+        order = await Order.findById(identifier);
+    } else {
+        // যদি কাস্টম অর্ডার নম্বর হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
+        order = await Order.findOne({ orderNumber: identifier });
+    }
+
+    if (!order) {
+      // যদি ObjectId বা orderNumber কোনোটি দিয়েই না পাওয়া যায়
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    res.status(200).json({ data: { order } });
+
+  } catch (error) {
+    // console.error(error) যোগ করুন যাতে কোনো অপ্রত্যাশিত এরর লগ হয়
+    console.error("❌ Error fetching order:", error); 
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+// export const updateOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
+//     const { status, paymentStatus } = req.body
+
+//     const updateData = {}
+//     if (status) updateData.status = status
+//     if (paymentStatus) updateData.paymentStatus = paymentStatus
+
+//     const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
+
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
+
+    
+//     if (status === "shipped" && !order.pathaoOrderId) {
+//       try {
+//         console.log('Creating Pathao order for:', order.orderNumber);
+        
+//         const pathaoRes = await createPathaoOrder(order)
+
+//         order.pathaoTrackingId = pathaoRes.data.consignment_id
+//         order.pathaoOrderId = pathaoRes.data.order_id
+//         order.pathaoStatus = pathaoRes.data.status
+
+//         await order.save()
+//         console.log("Pathao order created successfully:", pathaoRes.data)
+        
+//       } catch (err) {
+//         console.error("❌ Pathao order creation failed:", err.message)
+        
+//         // Sandbox-specific error handling
+//         if (PATHAO_BASE_URL.includes('sandbox')) {
+//           console.log('Sandbox environment - creating mock Pathao data');
+          
+//           // Mock data for sandbox testing
+//           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
+//           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
+//           order.pathaoStatus = 'pending';
+//           order.pathaoSandboxMode = true;
+          
+//           await order.save();
+//           console.log('✅ Mock Pathao data created for sandbox testing');
+//         } else {
+//           // Production error handling
+//           order.pathaoError = err.message;
+//           await order.save();
+//         }
+//       }
+//     }
+
+//     res.status(200).json({
+//       status: "success",
+//       message: "Order updated successfully",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Update order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
+
+
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params
@@ -647,10 +1005,10 @@ export const updateOrder = async (req, res) => {
       return res.status(404).json({ message: "Order not found" })
     }
 
-    // ✅ Pathao তে Order Create শুধু যখন shipped করা হবে
+    
     if (status === "shipped" && !order.pathaoOrderId) {
       try {
-        console.log('🔄 Creating Pathao order for:', order.orderNumber);
+        console.log('Creating Pathao order for:', order.orderNumber);
         
         const pathaoRes = await createPathaoOrder(order)
 
@@ -659,14 +1017,14 @@ export const updateOrder = async (req, res) => {
         order.pathaoStatus = pathaoRes.data.status
 
         await order.save()
-        console.log("✅ Pathao order created successfully:", pathaoRes.data)
+        console.log("Pathao order created successfully:", pathaoRes.data)
         
       } catch (err) {
         console.error("❌ Pathao order creation failed:", err.message)
         
-        // Sandbox-specific error handling
+        // ✅ FIXED: PATHAO_BASE_URL is now defined
         if (PATHAO_BASE_URL.includes('sandbox')) {
-          console.log('⚠️  Sandbox environment - creating mock Pathao data');
+          console.log('Sandbox environment - creating mock Pathao data');
           
           // Mock data for sandbox testing
           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
@@ -694,6 +1052,7 @@ export const updateOrder = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message })
   }
 }
+
 
 
 export const cancelOrder = async (req, res) => {
@@ -923,24 +1282,109 @@ export const getSalesData = async (req, res) => {
   }
 };
 
-// অর্ডার স্ট্যাটাস ডেটা
+
+// export const getOrderStatusData = async (req, res) => {
+//   try {
+//     const { range = 'all' } = req.query;
+
+//     const dateFilter = {};
+//     if (range !== 'all') {
+//       const now = new Date();
+//       switch (range) {
+//         case '7days':
+//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
+//           break;
+//         case '30days':
+//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
+//           break;
+//         case '6months':
+//           dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
+//           break;
+//       }
+//     }
+
+//     const orderStatusCounts = await Order.aggregate([
+//       {
+//         $match: dateFilter
+//       },
+//       {
+//         $group: {
+//           _id: '$status',
+//           count: { $sum: 1 }
+//         }
+//       }
+//     ]);
+
+//     const totalOrders = orderStatusCounts.reduce((sum, item) => sum + item.count, 0);
+
+//     const statusColors = {
+//       'confirmed': '#10B981',
+//       'processing': '#3B82F6',
+//       'shipped': '#8B5CF6',
+//       'delivered': '#059669',
+//       'pending': '#F59E0B',
+//       'cancelled': '#EF4444'
+//     };
+
+//     const statusLabels = {
+//       'confirmed': 'Confirmed',
+//       'processing': 'Processing',
+//       'shipped': 'Shipped',
+//       'delivered': 'Delivered',
+//       'pending': 'Pending',
+//       'cancelled': 'Cancelled'
+//     };
+
+//     const orderStatusData = orderStatusCounts.map(item => ({
+//       name: statusLabels[item._id] || item._id,
+//       value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
+//       color: statusColors[item._id] || '#6B7280'
+//     }));
+
+//     res.json({
+//       status: 'success',
+//       data: orderStatusData
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       status: 'error',
+//       message: error.message
+//     });
+//   }
+// };
+
 export const getOrderStatusData = async (req, res) => {
   try {
     const { range = 'all' } = req.query;
 
     const dateFilter = {};
     if (range !== 'all') {
-      const now = new Date();
+      const now = new Date(); 
+      let startDate;
+
       switch (range) {
         case '7days':
-          dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
+         
+          startDate = new Date(now.setDate(now.getDate() - 7));
           break;
         case '30days':
-          dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
+         
+          startDate = new Date(now.setDate(now.getDate() - 30));
           break;
         case '6months':
-          dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
+        
+          startDate = new Date(now.setMonth(now.getMonth() - 6));
           break;
+        default:
+         
+          startDate = null; 
+          break;
+      }
+      
+    
+      if (startDate) {
+        dateFilter.createdAt = { $gte: startDate };
       }
     }
 
@@ -978,7 +1422,8 @@ export const getOrderStatusData = async (req, res) => {
 
     const orderStatusData = orderStatusCounts.map(item => ({
       name: statusLabels[item._id] || item._id,
-      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
+   
+      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0, 
       color: statusColors[item._id] || '#6B7280'
     }));
 
@@ -988,14 +1433,14 @@ export const getOrderStatusData = async (req, res) => {
     });
 
   } catch (error) {
+   
+    console.error('❌ Error in getOrderStatusData:', error); 
     res.status(500).json({
       status: 'error',
-      message: error.message
+      message: error.message || 'Internal server error'
     });
   }
 };
-
-
 
 // Legacy functions for backward compatibility
 export const getUserOrders = getMyOrders

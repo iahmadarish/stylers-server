@@ -54,6 +54,7 @@ import {
   createUser
 } from "../controllers/auth.controller.js"
 import { protect } from "../middleware/auth.middleware.js"
+import User from "../models/User.js"
 
 const router = express.Router()
 
@@ -68,6 +69,31 @@ router.patch("/reset-password/:token", resetPassword)
 router.post("/google", googleAuth)
 router.post("/facebook", facebookAuth)
 router.post("/verify-password-otp", verifyPasswordResetOTP)
+
+
+router.get('/profile', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password')
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      })
+    }
+    
+    res.json({
+      success: true,
+      data: { user }
+    })
+  } catch (error) {
+    console.error('Profile fetch error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    })
+  }
+})
+
 
 // Protected routes
 router.get("/logout", protect, logout)

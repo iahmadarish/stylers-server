@@ -8,7 +8,7 @@ import passport from "passport"
 import session from "express-session"
 import cron from 'node-cron';
 import Product from './models/Product.js';
-
+import { startCronJobs } from './utils/cronJobs.js';
 
 // Load environment variables first
 dotenv.config()
@@ -25,7 +25,7 @@ import paymentRoutes from "./routes/payment.routes.js"
 import checkoutRoutes from "./routes/checkout.routes.js"
 import reviewRoutes from "./routes/review.routes.js"
 import stockNotificationRoutes from "./routes/stockNotifications.js"
-import stockReportRoutes from "./routes/stockNotifications.js"
+import stockReportRoutes from "./routes/stockReports.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
 
@@ -50,10 +50,20 @@ const corsOptions = {
       "http://paarel.com",
       "https://www.paarel.com",
       "https://paarel.com",
+
+   "https://staging.paarel.com",
+      "http://staging.paarel.com",
+      "staging.paarel.com",
+
       "http://31.97.107.12",
       "http://31.97.107.12:5173",
       "https://stylers-5q83.vercel.app",
       "https://stylersoutfit.vercel.app",
+
+      "https://admin.paarel.com",
+      "http://admin.paarel.com",
+      "admin.paarel.com",
+  
     ];
     
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -80,8 +90,8 @@ const corsOptions = {
 };
 
 // Enable pre-flight requests for all routes
-app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Pre-flight requests
 
@@ -99,6 +109,14 @@ app.use(
     },
   }),
 )
+
+
+app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+        return res.redirect(`https://${req.hostname}${req.url}`);
+    }
+    next();
+});
 
 // Passport middleware
 app.use(passport.initialize())
@@ -119,7 +137,7 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-cron.schedule('* * * * *', async () => {
+cron.schedule('*/10 * * * *', async () => {
   try {
     console.log('[CRON] Running discount status check...');
     await Product.updateDiscountPrices();
@@ -127,6 +145,9 @@ cron.schedule('* * * * *', async () => {
     console.error('[CRON] Error in discount update:', error);
   }
 });
+
+startCronJobs();
+
 
 // Checking server start up onces the server start
 setTimeout(async () => {
@@ -198,11 +219,11 @@ app.use(errorHandler)
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
-    console.log("✅ Connected to MongoDB")
+    console.log("Connected to MongoDB")
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`)
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`)
-      console.log(`🔗 Health check: http://localhost:${PORT}`)
+      console.log(`Server running on port ${PORT}`)
+      console.log(`Environment: ${process.env.NODE_ENV || "development"}`)
+      console.log(` Health check: http://localhost:${PORT}`)
     })
   })
   .catch((error) => {

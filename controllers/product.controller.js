@@ -668,6 +668,7 @@ export const updateProduct = catchAsync(async (req, res, next) => {
 
 
 
+// controllers/product.controller.js
 export const deleteProduct = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id)
 
@@ -705,8 +706,10 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
   // Delete the product
   await Product.findByIdAndDelete(req.params.id)
 
-  res.status(204).json({
+  // ✅ FIX: Send proper JSON response instead of 204
+  res.status(200).json({
     status: "success",
+    message: "Product deleted successfully",
     data: null,
   })
 })

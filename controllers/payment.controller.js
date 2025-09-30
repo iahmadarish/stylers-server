@@ -435,7 +435,7 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       couponCode: couponCode || null,
       couponDiscount: 0,
       specialInstructions: specialInstructions || "",
-      status: "confirmed",
+      status: "pending", // confirmed was changed with pending as per client request
       paymentStatus: "pending",
     }
 
@@ -766,7 +766,7 @@ export const paymentSuccess = async (req, res) => {
             couponCode: guestOrderData.couponCode || null,
             couponDiscount: 0,
             specialInstructions: guestOrderData.specialInstructions || "",
-            status: "confirmed",
+            status: "pending",// confirmed was changed with pending as per client request
             paymentStatus: "paid",
             paymentGatewayResponse: {
               pg_txnid: transactionId,
@@ -842,7 +842,7 @@ export const paymentSuccess = async (req, res) => {
                 country: "Bangladesh",
               },
               paymentMethod: "card",
-              status: "confirmed",
+              status: "pendnig", // confirmed was changed with pending as per client request
               paymentStatus: "paid",
               specialNotes: "Order created from payment verification - original order data lost",
               paymentGatewayResponse: verificationResult,
@@ -1303,7 +1303,7 @@ export const paymentNotify = async (req, res) => {
         couponCode: guestOrderData.couponCode || null,
         couponDiscount: 0,
         specialInstructions: guestOrderData.specialInstructions || "",
-        status: "confirmed",
+        status: "pending", // confirmed was changed with pending as per client request
         paymentStatus: "paid",
         paymentGatewayResponse: {
           pg_txnid: callbackData.pg_txnid || callbackData.transaction_id,
@@ -1343,7 +1343,7 @@ export const paymentNotify = async (req, res) => {
       if (order) {
 
         order.paymentStatus = "paid"
-        order.status = "confirmed"
+        order.status = "pending" // confirmed was changed with pending as per client request
         order.paymentGatewayResponse = {
           ...order.paymentGatewayResponse,
           ...callbackData,

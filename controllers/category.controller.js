@@ -72,38 +72,34 @@ export const getParentCategory = catchAsync(async (req, res, next) => {
 export const updateParentCategory = catchAsync(async (req, res, next) => {
   const { name, description, isActive } = req.body
 
-  // Get existing category
   const existingCategory = await ParentCategory.findById(req.params.id)
   if (!existingCategory) {
     return next(new AppError("Category not found", 404))
   }
 
-  // Handle image upload
-  let image = existingCategory.image
+  // একটি অবজেক্ট তৈরি করুন যা আপডেটের জন্য ব্যবহার হবে
+  const updateFields = {
+    name,
+    description,
+    isActive: isActive === "true" || isActive === true,
+  }
+
+  // ছবি আপলোড হ্যান্ডেল করুন
   if (req.file) {
     console.log("Updating with new image:", req.file.path)
-
-    // Delete old image if exists
     if (existingCategory.image) {
-      try {
-        const publicId = getPublicIdFromUrl(existingCategory.image)
-        console.log("Deleting old image with public ID:", publicId)
-        await deleteImage(publicId)
-      } catch (error) {
-        console.error("Error deleting old image:", error)
-      }
+      await deleteImage(getPublicIdFromUrl(existingCategory.image))
     }
-    image = req.file.path
+    updateFields.image = req.file.path
+  } else if (req.body.removeImage === "true" && existingCategory.image) {
+    // ছবি মোছার লজিক
+    await deleteImage(getPublicIdFromUrl(existingCategory.image))
+    updateFields.image = null
   }
 
   const category = await ParentCategory.findByIdAndUpdate(
     req.params.id,
-    {
-      name,
-      description,
-      isActive: isActive === "true" || isActive === true,
-      image,
-    },
+    updateFields, // এখানে সরাসরি updateFields অবজেক্টটি ব্যবহার করুন
     {
       new: true,
       runValidators: true,

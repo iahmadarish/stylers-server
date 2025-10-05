@@ -26,6 +26,7 @@ import checkoutRoutes from "./routes/checkout.routes.js"
 import reviewRoutes from "./routes/review.routes.js"
 import stockNotificationRoutes from "./routes/stockNotifications.js"
 import stockReportRoutes from "./routes/stockReports.js"
+import blogRoutes from "./routes/blogRoutes.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
 
@@ -173,6 +174,7 @@ app.use("/api/checkout", checkoutRoutes)
 app.use("/api/reviews", reviewRoutes)
 app.use("/api/stock/notifications", stockNotificationRoutes);
 app.use("/api/stock/reports", stockReportRoutes);
+app.use('/api/blogs', blogRoutes);
 
 // Health check route
 app.get("/", (req, res) => {

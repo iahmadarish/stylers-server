@@ -1,158 +1,101 @@
-import Blog from '../models/Blog.js';
+import Blog from '../models/Blog.js'; 
+import mongoose from 'mongoose'; // নতুন: ID Validation এর জন্য Mongoose ইম্পোর্ট করা হলো
 
+// POST: /api/blogs
 export const createBlog = async (req, res) => {
-  try {
-    const blog = new Blog(req.body);
-    await blog.save();
-    
-    res.status(201).json({
-      success: true,
-      message: 'Blog created successfully',
-      data: blog
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
-  }
+    try {
+        const newBlog = new Blog(req.body);
+        const savedBlog = await newBlog.save();
+        res.status(201).json(savedBlog);
+    } catch (err) {
+        res.status(400).json({ 
+            message: 'Failed to create blog post. Check data validity.', 
+            error: err.message 
+        });
+    }
 };
 
+// GET: /api/blogs
 export const getAllBlogs = async (req, res) => {
-  try {
-    const { 
-      status, 
-      category, 
-      search, 
-      page = 1, 
-      limit = 10,
-      sortBy = 'createdAt',
-      order = 'desc'
-    } = req.query;
-    
-    const query = {};
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (search) {
-      query.$or = [
-        { blogTitle: { $regex: search, $options: 'i' } },
-        { metaTitle: { $regex: search, $options: 'i' } },
-        { blogContent: { $regex: search, $options: 'i' } }
-      ];
+    try {
+        // শুধুমাত্র প্রয়োজনীয় ফিল্ডগুলি আনা হচ্ছে (যেমন: BlogSection-এর জন্য)
+        const blogs = await Blog.find().select('blogTitle _id category readTime image author date').sort({ createdAt: -1 });
+        res.status(200).json(blogs);
+    } catch (err) {
+        res.status(500).json({ 
+            message: 'Error fetching blog posts list.', 
+            error: err.message 
+        });
     }
-    
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const sortOptions = { [sortBy]: sortOrder };
-    
-    const blogs = await Blog.find(query)
-      .select('-blogContent -productsHighlight')
-      .sort(sortOptions)
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
-    
-    const count = await Blog.countDocuments(query);
-    
-    res.status(200).json({
-      success: true,
-      data: blogs,
-      pagination: {
-        total: count,
-        totalPages: Math.ceil(count / Number(limit)),
-        currentPage: Number(page),
-        perPage: Number(limit)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
 };
 
+// GET: /api/blogs/:id
 export const getBlogById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const isObjectId = id.match(/^[0-9a-fA-F]{24}$/);
-    const query = isObjectId ? { _id: id } : { slug: id };
-    
-    const blog = await Blog.findOne(query);
-    
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
+    try {
+        const id = req.params.id;
+
+        // FIX: Invalid ID ফরম্যাট চেক করে 500 এর পরিবর্তে 404/400 রিটার্ন করা
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(404).json({ message: `Blog post not found. ID: ${id} is invalid.` });
+        }
+
+        const blog = await Blog.findById(id);
+        
+        if (!blog) {
+            return res.status(404).json({ message: 'Blog post not found.' });
+        }
+        res.status(200).json(blog);
+    } catch (err) {
+        // এখন এটি শুধুমাত্র অন্যান্য unexpected server error হ্যান্ডেল করবে
+        res.status(500).json({ 
+            message: 'Error fetching single blog post.', 
+            error: err.message 
+        });
     }
-    
-    blog.views += 1;
-    await blog.save();
-    
-    res.status(200).json({
-      success: true,
-      data: blog
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
 };
 
+// PUT: /api/blogs/:id
 export const updateBlog = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const blog = await Blog.findByIdAndUpdate(
-      id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
+    try {
+        const id = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(404).json({ message: 'Invalid Blog ID format for update.' });
+        }
+        
+        const updatedBlog = await Blog.findByIdAndUpdate(
+            id,
+            { ...req.body, updatedAt: Date.now() },
+            { new: true, runValidators: true }
+        );
+        if (!updatedBlog) {
+            return res.status(404).json({ message: 'Blog post not found for update.' });
+        }
+        res.status(200).json(updatedBlog);
+    } catch (err) {
+        res.status(400).json({ 
+            message: 'Failed to update blog post.', 
+            error: err.message 
+        });
     }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Blog updated successfully',
-      data: blog
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
-  }
 };
 
+// DELETE: /api/blogs/:id
 export const deleteBlog = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const blog = await Blog.findByIdAndDelete(id);
-    
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
+    try {
+        const id = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(404).json({ message: 'Invalid Blog ID format for deletion.' });
+        }
+
+        const deletedBlog = await Blog.findByIdAndDelete(id);
+        if (!deletedBlog) {
+            return res.status(404).json({ message: 'Blog post not found for deletion.' });
+        }
+        res.status(200).json({ message: 'Blog post deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ 
+            message: 'Error deleting blog post.', 
+            error: err.message 
+        });
     }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Blog deleted successfully',
-      data: { deletedId: id }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
 };

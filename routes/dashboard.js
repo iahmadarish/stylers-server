@@ -11,7 +11,7 @@ import {
 const router = express.Router()
 
 router.use(protect)
-router.use(restrictTo("admin"))
+router.use(restrictTo("admin", "executive"))
 
 router.get("/", getDashboardStats)
 router.get("/sales", getSalesData)

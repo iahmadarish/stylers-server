@@ -18,7 +18,7 @@ const router = express.Router()
 router.get("/active", getActiveCampaigns)
 
 // Admin routes
-router.use(protect, restrictTo("admin"))
+router.use(protect, restrictTo("admin", "executive"))
 router.route("/")
   .get(getCampaigns)
   .post(campaignUpload.single('bannerImage'), createCampaign)

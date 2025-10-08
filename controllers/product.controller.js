@@ -122,48 +122,48 @@ export const createProduct = async (req, res) => {
         }
 
         // Process sizes inside the variant
-     variant.sizes.forEach((s) => {
-  const variantData = {
-    productCode: variant.productCode || generateProductCode(),
-    colorCode: variant.colorCode,
-    colorName: variant.colorName,
-    size: s.size,
-    dimension: s.dimension || "",
-    stock: Number.parseInt(s.stock) || 0,
-  }
+        variant.sizes.forEach((s) => {
+          const variantData = {
+            productCode: variant.productCode || generateProductCode(),
+            colorCode: variant.colorCode,
+            colorName: variant.colorName,
+            size: s.size,
+            dimension: s.dimension || "",
+            stock: Number.parseInt(s.stock) || 0,
+          }
 
-  // ✅ ONLY set variant-specific pricing if explicitly provided
-  if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-    variantData.basePrice = Number.parseFloat(variant.basePrice)
-  }
+          // ✅ ONLY set variant-specific pricing if explicitly provided
+          if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
+            variantData.basePrice = Number.parseFloat(variant.basePrice)
+          }
 
-  // ✅ CRITICAL FIX: Only set discount fields if explicitly provided
-  // If discountPercentage is provided (even 0), set it explicitly
-  if (variant.hasOwnProperty('discountPercentage')) {
-  const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
-  variantData.discountPercentage = discountPercentage
-  
-  if (discountPercentage > 0) {
-    variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
-    variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
-  } else {
-    // Explicitly set to 0 to prevent product-level discount inheritance
-    variantData.discountPercentage = 0
-    variantData.discountStartTime = null
-    variantData.discountEndTime = null
-  }
-} else {
-  // ✅ IMPORTANT: If discountPercentage is NOT provided in the form data,
-  // set to null to explicitly indicate NO discount should be applied
-  variantData.discountPercentage = null
-  variantData.discountStartTime = null
-  variantData.discountEndTime = null
-}
+          // ✅ CRITICAL FIX: Only set discount fields if explicitly provided
+          // If discountPercentage is provided (even 0), set it explicitly
+          if (variant.hasOwnProperty('discountPercentage')) {
+            const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
+            variantData.discountPercentage = discountPercentage
 
-  processedVariants.push(variantData)
-  totalStock += Number.parseInt(s.stock) || 0
-  console.log("[DEBUG] Added variant:", variantData)
-})
+            if (discountPercentage > 0) {
+              variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
+              variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+            } else {
+              // Explicitly set to 0 to prevent product-level discount inheritance
+              variantData.discountPercentage = 0
+              variantData.discountStartTime = null
+              variantData.discountEndTime = null
+            }
+          } else {
+            // ✅ IMPORTANT: If discountPercentage is NOT provided in the form data,
+            // set to null to explicitly indicate NO discount should be applied
+            variantData.discountPercentage = null
+            variantData.discountStartTime = null
+            variantData.discountEndTime = null
+          }
+
+          processedVariants.push(variantData)
+          totalStock += Number.parseInt(s.stock) || 0
+          console.log("[DEBUG] Added variant:", variantData)
+        })
       }
     }
 
@@ -300,6 +300,8 @@ export const createProduct = async (req, res) => {
 export const getProducts = catchAsync(async (req, res, next) => {
   // Build filter object
   const filter = {}
+
+  filter.isActive = true
 
   // Handle parent category filtering (by slug or ObjectId)
   if (req.query.parentCategoryId) {
@@ -621,6 +623,12 @@ export const updateProduct = catchAsync(async (req, res, next) => {
       "discountStartTime",
       "discountEndTime",
     ];
+
+    if (productData.isActive !== undefined) {
+      existingProduct.isActive = productData.isActive;
+      console.log(`[DEBUG] Updating isActive to: ${productData.isActive}`);
+    }
+
     Object.keys(productData).forEach((key) => {
       if (productData[key] !== undefined && !excludedFields.includes(key)) {
         existingProduct[key] = productData[key];

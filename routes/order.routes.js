@@ -9,7 +9,7 @@ import {
   createGuestOrder,
   getGuestOrder,
   trackGuestOrder,
-  getDashboardStats, // নতুন কন্ট্রোলার যোগ করুন
+  getDashboardStats,
   getSalesData,
   getOrderStatusData
 } from "../controllers/order.controller.js"
@@ -24,10 +24,10 @@ router.post("/guest", createGuestOrder)
 router.get("/guest/:orderNumber", getGuestOrder)
 router.post("/guest/track", trackGuestOrder)
 
-// ড্যাশবোর্ড এন্ডপয়েন্ট - শুধু অ্যাডমিনের জন্য
+
 router.get("/dashboard/stats", protect, restrictTo("admin", "executive"), getDashboardStats)
-router.get("/dashboard/sales", protect, restrictTo("admin"), getSalesData)
-router.get("/dashboard/order-status", protect, restrictTo("admin"), getOrderStatusData)
+router.get("/dashboard/sales", protect, restrictTo("admin", "executive"), getSalesData)
+router.get("/dashboard/order-status", protect, restrictTo("admin", "executive"), getOrderStatusData)
 
 router.use(protect)
 
@@ -39,11 +39,11 @@ router.get("/:id", getOrder)
 
 
 // Simplified version
-router.get('/top-products-simple', async (req, res) => {
+router.get('/top-products-simple', restrictTo("admin", "executive"), async (req, res) => {
   try {
     const { limit = 10 } = req.query;
 
-    // Delivered বা paid orders গুলি fetch করুন
+
     const orders = await Order.find({
       $or: [
         { status: 'delivered' },
@@ -51,7 +51,6 @@ router.get('/top-products-simple', async (req, res) => {
       ]
     }).populate('items.productId');
 
-    // Product-wise sales calculate করুন
     const productSales = {};
     
     orders.forEach(order => {
@@ -75,7 +74,7 @@ router.get('/top-products-simple', async (req, res) => {
       });
     });
 
-    // Array তে convert করুন এবং sort করুন
+
     const topProducts = Object.values(productSales)
       .sort((a, b) => b.totalSold - a.totalSold)
       .slice(0, parseInt(limit))
@@ -111,7 +110,7 @@ router.get('/top-products-simple', async (req, res) => {
 
 
 // Admin routes
-router.use(restrictTo("admin"))
+router.use(restrictTo("admin", "executive"))
 router.get("/", getOrders)
 router.patch("/:id", updateOrder)
 

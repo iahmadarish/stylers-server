@@ -25,7 +25,7 @@ router.get("/guest/:orderNumber", getGuestOrder)
 router.post("/guest/track", trackGuestOrder)
 
 // ড্যাশবোর্ড এন্ডপয়েন্ট - শুধু অ্যাডমিনের জন্য
-router.get("/dashboard/stats", protect, restrictTo("admin"), getDashboardStats)
+router.get("/dashboard/stats", protect, restrictTo("admin", "executive"), getDashboardStats)
 router.get("/dashboard/sales", protect, restrictTo("admin"), getSalesData)
 router.get("/dashboard/order-status", protect, restrictTo("admin"), getOrderStatusData)
 

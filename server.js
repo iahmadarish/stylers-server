@@ -137,7 +137,7 @@ app.use((req, res, next) => {
   next()
 })
 
-// Checking discount each minutes
+// Checking discount each 10 minutes for better performance in server to cron calculation.
 cron.schedule('*/10 * * * *', async () => {
   try {
     console.log('[CRON] Running discount status check...');

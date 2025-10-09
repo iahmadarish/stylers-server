@@ -21,24 +21,44 @@ import {
   updateStyle,
   deleteStyle,
   getCategoryHierarchy,
+  getParentCategoriesForAdmin,
+  getParentCategoryForAdmin,
+  getSubCategoriesForAdmin,
+  getSubCategoryForAdmin,
+  getDressTypesForAdmin,
+  getDressTypeForAdmin,
+  getStylesForAdmin,
+  getStyleForAdmin,
+  getCategoryHierarchyForAdmin,
 } from "../controllers/category.controller.js"
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
 import { categoryUpload } from "../utils/cloudinary.js"
 
 const router = express.Router()
 
-// Public routes
-router.get("/parent", getParentCategories)
-router.get("/parent/:id", getParentCategory)
-router.get("/sub", getSubCategories)
-router.get("/sub/:id", getSubCategory)
-router.get("/dress-type", getDressTypes)
-router.get("/dress-type/:id", getDressType)
-router.get("/style", getStyles)
-router.get("/style/:id", getStyle)
-router.get("/hierarchy", getCategoryHierarchy)
+// Admin view routes - authentication required
+router.get("/hierarchy/admin", protect, restrictTo("admin", "executive"), getCategoryHierarchyForAdmin)
+router.get("/parent/admin", protect, restrictTo("admin", "executive"), getParentCategoriesForAdmin)
+router.get("/sub/admin", protect, restrictTo("admin", "executive"), getSubCategoriesForAdmin)
+router.get("/dress-type/admin", protect, restrictTo("admin", "executive"), getDressTypesForAdmin)
+router.get("/style/admin", protect, restrictTo("admin", "executive"), getStylesForAdmin)
+router.get("/parent/:id/admin", protect, restrictTo("admin", "executive"), getParentCategoryForAdmin)
+router.get("/sub/:id/admin", protect, restrictTo("admin", "executive"), getSubCategoryForAdmin)
+router.get("/dress-type/:id/admin", protect, restrictTo("admin", "executive"), getDressTypeForAdmin)
+router.get("/style/:id/admin", protect, restrictTo("admin", "executive"), getStyleForAdmin)
 
-// Admin routes
+// Public routes - no authentication required
+router.get("/hierarchy", getCategoryHierarchy)
+router.get("/parent", getParentCategories)
+router.get("/sub", getSubCategories)
+router.get("/dress-type", getDressTypes)
+router.get("/style", getStyles)
+router.get("/parent/:id", getParentCategory)
+router.get("/sub/:id", getSubCategory)
+router.get("/dress-type/:id", getDressType)
+router.get("/style/:id", getStyle)
+
+// Admin CRUD routes (শুধুমাত্র admin এর জন্য)
 router.use(protect, restrictTo("admin"))
 
 // Parent category routes

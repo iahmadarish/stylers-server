@@ -33,11 +33,11 @@ export const createParentCategory = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get all parent categories
+// @desc    Get all parent categories (Public - only active)
 // @route   GET /api/categories/parent
 // @access  Public
 export const getParentCategories = catchAsync(async (req, res, next) => {
-  const categories = await ParentCategory.find()
+  const categories = await ParentCategory.find({ isActive: true })
 
   res.status(200).json({
     status: "success",
@@ -48,10 +48,46 @@ export const getParentCategories = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get parent category by ID
+// @desc    Get all parent categories (Admin - all categories)
+// @route   GET /api/categories/parent/admin
+// @access  Private/Admin
+export const getParentCategoriesForAdmin = catchAsync(async (req, res, next) => {
+  const categories = await ParentCategory.find()
+
+  res.status(200).json({
+    status: "success",
+    results: categories.length,
+    data: {
+      categories,
+    },
+  })
+})
+ 
+// @desc    Get parent category by ID (Public - only if active)
 // @route   GET /api/categories/parent/:id
 // @access  Public
 export const getParentCategory = catchAsync(async (req, res, next) => {
+  const category = await ParentCategory.findOne({ 
+    _id: req.params.id, 
+    isActive: true 
+  })
+
+  if (!category) {
+    return next(new AppError("Category not found", 404))
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      category,
+    },
+  })
+})
+
+// @desc    Get parent category by ID (Admin - any category)
+// @route   GET /api/categories/parent/:id/admin
+// @access  Private/Admin
+export const getParentCategoryForAdmin = catchAsync(async (req, res, next) => {
   const category = await ParentCategory.findById(req.params.id)
 
   if (!category) {
@@ -77,14 +113,12 @@ export const updateParentCategory = catchAsync(async (req, res, next) => {
     return next(new AppError("Category not found", 404))
   }
 
-  // একটি অবজেক্ট তৈরি করুন যা আপডেটের জন্য ব্যবহার হবে
   const updateFields = {
     name,
     description,
     isActive: isActive === "true" || isActive === true,
   }
 
-  // ছবি আপলোড হ্যান্ডেল করুন
   if (req.file) {
     console.log("Updating with new image:", req.file.path)
     if (existingCategory.image) {
@@ -92,14 +126,13 @@ export const updateParentCategory = catchAsync(async (req, res, next) => {
     }
     updateFields.image = req.file.path
   } else if (req.body.removeImage === "true" && existingCategory.image) {
-    // ছবি মোছার লজিক
     await deleteImage(getPublicIdFromUrl(existingCategory.image))
     updateFields.image = null
   }
 
   const category = await ParentCategory.findByIdAndUpdate(
     req.params.id,
-    updateFields, // এখানে সরাসরি updateFields অবজেক্টটি ব্যবহার করুন
+    updateFields,
     {
       new: true,
       runValidators: true,
@@ -124,7 +157,6 @@ export const deleteParentCategory = catchAsync(async (req, res, next) => {
     return next(new AppError("Category not found", 404))
   }
 
-  // Delete image from cloudinary if exists
   if (category.image) {
     const publicId = getPublicIdFromUrl(category.image)
     await deleteImage(publicId)
@@ -132,30 +164,24 @@ export const deleteParentCategory = catchAsync(async (req, res, next) => {
 
   await ParentCategory.findByIdAndDelete(req.params.id)
 
-  // Delete all related subcategories
   const subCategories = await SubCategory.find({ parentCategoryId: req.params.id })
 
-  // Delete subcategory images
   for (const subCategory of subCategories) {
     if (subCategory.image) {
       const publicId = getPublicIdFromUrl(subCategory.image)
       await deleteImage(publicId)
     }
 
-    // Find and delete dress types
     const dressTypes = await DressType.find({ subCategoryId: subCategory._id })
 
-    // Delete dress type images
     for (const dressType of dressTypes) {
       if (dressType.image) {
         const publicId = getPublicIdFromUrl(dressType.image)
         await deleteImage(publicId)
       }
 
-      // Find and delete styles
       const styles = await Style.find({ dressTypeId: dressType._id })
 
-      // Delete style images
       for (const style of styles) {
         if (style.image) {
           const publicId = getPublicIdFromUrl(style.image)
@@ -163,15 +189,12 @@ export const deleteParentCategory = catchAsync(async (req, res, next) => {
         }
       }
 
-      // Delete styles
       await Style.deleteMany({ dressTypeId: dressType._id })
     }
 
-    // Delete dress types
     await DressType.deleteMany({ subCategoryId: subCategory._id })
   }
 
-  // Delete subcategories
   await SubCategory.deleteMany({ parentCategoryId: req.params.id })
 
   res.status(204).json({
@@ -187,13 +210,11 @@ export const deleteParentCategory = catchAsync(async (req, res, next) => {
 export const createSubCategory = catchAsync(async (req, res, next) => {
   const { name, parentCategoryId, description, isActive } = req.body
 
-  // Check if parent category exists
   const parentCategory = await ParentCategory.findById(parentCategoryId)
   if (!parentCategory) {
     return next(new AppError("Parent category not found", 404))
   }
 
-  // Handle image upload
   const image = req.file ? req.file.path : undefined
 
   const subCategory = await SubCategory.create({
@@ -212,13 +233,38 @@ export const createSubCategory = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get all sub categories
+// @desc    Get all sub categories (Public - only active with active parent)
 // @route   GET /api/categories/sub
 // @access  Public
 export const getSubCategories = catchAsync(async (req, res, next) => {
+  const filter = { isActive: true }
+
+  if (req.query.parentCategoryId) {
+    filter.parentCategoryId = req.query.parentCategoryId
+  }
+
+  const subCategories = await SubCategory.find(filter).populate({
+    path: "parentCategoryId",
+    match: { isActive: true }
+  })
+
+  const filteredSubCategories = subCategories.filter(subCat => subCat.parentCategoryId !== null)
+
+  res.status(200).json({
+    status: "success",
+    results: filteredSubCategories.length,
+    data: {
+      subCategories: filteredSubCategories,
+    },
+  })
+})
+
+// @desc    Get all sub categories (Admin - all categories)
+// @route   GET /api/categories/sub/admin
+// @access  Private/Admin
+export const getSubCategoriesForAdmin = catchAsync(async (req, res, next) => {
   const filter = {}
 
-  // Filter by parent category if provided
   if (req.query.parentCategoryId) {
     filter.parentCategoryId = req.query.parentCategoryId
   }
@@ -234,10 +280,34 @@ export const getSubCategories = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get sub category by ID
+// @desc    Get sub category by ID (Public - only if active with active parent)
 // @route   GET /api/categories/sub/:id
 // @access  Public
 export const getSubCategory = catchAsync(async (req, res, next) => {
+  const subCategory = await SubCategory.findOne({
+    _id: req.params.id,
+    isActive: true
+  }).populate({
+    path: "parentCategoryId",
+    match: { isActive: true }
+  })
+
+  if (!subCategory || !subCategory.parentCategoryId) {
+    return next(new AppError("Sub category not found", 404))
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      subCategory,
+    },
+  })
+})
+
+// @desc    Get sub category by ID (Admin - any category)
+// @route   GET /api/categories/sub/:id/admin
+// @access  Private/Admin
+export const getSubCategoryForAdmin = catchAsync(async (req, res, next) => {
   const subCategory = await SubCategory.findById(req.params.id).populate("parentCategoryId")
 
   if (!subCategory) {
@@ -258,7 +328,6 @@ export const getSubCategory = catchAsync(async (req, res, next) => {
 export const updateSubCategory = catchAsync(async (req, res, next) => {
   const { name, parentCategoryId, description, isActive } = req.body
 
-  // Check if parent category exists if it's being updated
   if (parentCategoryId) {
     const parentCategory = await ParentCategory.findById(parentCategoryId)
     if (!parentCategory) {
@@ -266,16 +335,13 @@ export const updateSubCategory = catchAsync(async (req, res, next) => {
     }
   }
 
-  // Get existing subcategory
   const existingSubCategory = await SubCategory.findById(req.params.id)
   if (!existingSubCategory) {
     return next(new AppError("Sub category not found", 404))
   }
 
-  // Handle image upload
   let image = existingSubCategory.image
   if (req.file) {
-    // Delete old image if exists
     if (existingSubCategory.image) {
       const publicId = getPublicIdFromUrl(existingSubCategory.image)
       await deleteImage(publicId)
@@ -320,7 +386,6 @@ export const deleteSubCategory = catchAsync(async (req, res, next) => {
     return next(new AppError("Sub category not found", 404))
   }
 
-  // Delete image from cloudinary if exists
   if (subCategory.image) {
     const publicId = getPublicIdFromUrl(subCategory.image)
     await deleteImage(publicId)
@@ -328,20 +393,16 @@ export const deleteSubCategory = catchAsync(async (req, res, next) => {
 
   await SubCategory.findByIdAndDelete(req.params.id)
 
-  // Find and delete dress types
   const dressTypes = await DressType.find({ subCategoryId: req.params.id })
 
-  // Delete dress type images
   for (const dressType of dressTypes) {
     if (dressType.image) {
       const publicId = getPublicIdFromUrl(dressType.image)
       await deleteImage(publicId)
     }
 
-    // Find and delete styles
     const styles = await Style.find({ dressTypeId: dressType._id })
 
-    // Delete style images
     for (const style of styles) {
       if (style.image) {
         const publicId = getPublicIdFromUrl(style.image)
@@ -349,11 +410,9 @@ export const deleteSubCategory = catchAsync(async (req, res, next) => {
       }
     }
 
-    // Delete styles
     await Style.deleteMany({ dressTypeId: dressType._id })
   }
 
-  // Delete dress types
   await DressType.deleteMany({ subCategoryId: req.params.id })
 
   res.status(204).json({
@@ -369,13 +428,11 @@ export const deleteSubCategory = catchAsync(async (req, res, next) => {
 export const createDressType = catchAsync(async (req, res, next) => {
   const { name, subCategoryId, description, isActive } = req.body
 
-  // Check if sub category exists
   const subCategory = await SubCategory.findById(subCategoryId)
   if (!subCategory) {
     return next(new AppError("Sub category not found", 404))
   }
 
-  // Handle image upload
   const image = req.file ? req.file.path : undefined
 
   const dressType = await DressType.create({
@@ -394,13 +451,44 @@ export const createDressType = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get all dress types
+// @desc    Get all dress types (Public - only active with active parent hierarchy)
 // @route   GET /api/categories/dress-type
 // @access  Public
 export const getDressTypes = catchAsync(async (req, res, next) => {
+  const filter = { isActive: true }
+
+  if (req.query.subCategoryId) {
+    filter.subCategoryId = req.query.subCategoryId
+  }
+
+  const dressTypes = await DressType.find(filter).populate({
+    path: "subCategoryId",
+    match: { isActive: true },
+    populate: {
+      path: "parentCategoryId",
+      match: { isActive: true }
+    }
+  })
+
+  const filteredDressTypes = dressTypes.filter(dressType => 
+    dressType.subCategoryId && dressType.subCategoryId.parentCategoryId
+  )
+
+  res.status(200).json({
+    status: "success",
+    results: filteredDressTypes.length,
+    data: {
+      dressTypes: filteredDressTypes,
+    },
+  })
+})
+
+// @desc    Get all dress types (Admin - all categories)
+// @route   GET /api/categories/dress-type/admin
+// @access  Private/Admin
+export const getDressTypesForAdmin = catchAsync(async (req, res, next) => {
   const filter = {}
 
-  // Filter by sub category if provided
   if (req.query.subCategoryId) {
     filter.subCategoryId = req.query.subCategoryId
   }
@@ -421,10 +509,38 @@ export const getDressTypes = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get dress type by ID
+// @desc    Get dress type by ID (Public - only if active with active parent hierarchy)
 // @route   GET /api/categories/dress-type/:id
 // @access  Public
 export const getDressType = catchAsync(async (req, res, next) => {
+  const dressType = await DressType.findOne({
+    _id: req.params.id,
+    isActive: true
+  }).populate({
+    path: "subCategoryId",
+    match: { isActive: true },
+    populate: {
+      path: "parentCategoryId",
+      match: { isActive: true }
+    }
+  })
+
+  if (!dressType || !dressType.subCategoryId || !dressType.subCategoryId.parentCategoryId) {
+    return next(new AppError("Dress type not found", 404))
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      dressType,
+    },
+  })
+})
+
+// @desc    Get dress type by ID (Admin - any category)
+// @route   GET /api/categories/dress-type/:id/admin
+// @access  Private/Admin
+export const getDressTypeForAdmin = catchAsync(async (req, res, next) => {
   const dressType = await DressType.findById(req.params.id).populate({
     path: "subCategoryId",
     populate: {
@@ -450,7 +566,6 @@ export const getDressType = catchAsync(async (req, res, next) => {
 export const updateDressType = catchAsync(async (req, res, next) => {
   const { name, subCategoryId, description, isActive } = req.body
 
-  // Check if sub category exists if it's being updated
   if (subCategoryId) {
     const subCategory = await SubCategory.findById(subCategoryId)
     if (!subCategory) {
@@ -458,16 +573,13 @@ export const updateDressType = catchAsync(async (req, res, next) => {
     }
   }
 
-  // Get existing dress type
   const existingDressType = await DressType.findById(req.params.id)
   if (!existingDressType) {
     return next(new AppError("Dress type not found", 404))
   }
 
-  // Handle image upload
   let image = existingDressType.image
   if (req.file) {
-    // Delete old image if exists
     if (existingDressType.image) {
       const publicId = getPublicIdFromUrl(existingDressType.image)
       await deleteImage(publicId)
@@ -517,7 +629,6 @@ export const deleteDressType = catchAsync(async (req, res, next) => {
     return next(new AppError("Dress type not found", 404))
   }
 
-  // Delete image from cloudinary if exists
   if (dressType.image) {
     const publicId = getPublicIdFromUrl(dressType.image)
     await deleteImage(publicId)
@@ -525,10 +636,8 @@ export const deleteDressType = catchAsync(async (req, res, next) => {
 
   await DressType.findByIdAndDelete(req.params.id)
 
-  // Find and delete styles
   const styles = await Style.find({ dressTypeId: req.params.id })
 
-  // Delete style images
   for (const style of styles) {
     if (style.image) {
       const publicId = getPublicIdFromUrl(style.image)
@@ -536,7 +645,6 @@ export const deleteDressType = catchAsync(async (req, res, next) => {
     }
   }
 
-  // Delete styles
   await Style.deleteMany({ dressTypeId: req.params.id })
 
   res.status(204).json({
@@ -552,13 +660,11 @@ export const deleteDressType = catchAsync(async (req, res, next) => {
 export const createStyle = catchAsync(async (req, res, next) => {
   const { name, dressTypeId, description, isActive } = req.body
 
-  // Check if dress type exists
   const dressType = await DressType.findById(dressTypeId)
   if (!dressType) {
     return next(new AppError("Dress type not found", 404))
   }
 
-  // Handle image upload
   const image = req.file ? req.file.path : undefined
 
   const style = await Style.create({
@@ -577,13 +683,50 @@ export const createStyle = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get all styles
+// @desc    Get all styles (Public - only active with active parent hierarchy)
 // @route   GET /api/categories/style
 // @access  Public
 export const getStyles = catchAsync(async (req, res, next) => {
+  const filter = { isActive: true }
+
+  if (req.query.dressTypeId) {
+    filter.dressTypeId = req.query.dressTypeId
+  }
+
+  const styles = await Style.find(filter).populate({
+    path: "dressTypeId",
+    match: { isActive: true },
+    populate: {
+      path: "subCategoryId",
+      match: { isActive: true },
+      populate: {
+        path: "parentCategoryId",
+        match: { isActive: true }
+      }
+    }
+  })
+
+  const filteredStyles = styles.filter(style => 
+    style.dressTypeId && 
+    style.dressTypeId.subCategoryId && 
+    style.dressTypeId.subCategoryId.parentCategoryId
+  )
+
+  res.status(200).json({
+    status: "success",
+    results: filteredStyles.length,
+    data: {
+      styles: filteredStyles,
+    },
+  })
+})
+
+// @desc    Get all styles (Admin - all categories)
+// @route   GET /api/categories/style/admin
+// @access  Private/Admin
+export const getStylesForAdmin = catchAsync(async (req, res, next) => {
   const filter = {}
 
-  // Filter by dress type if provided
   if (req.query.dressTypeId) {
     filter.dressTypeId = req.query.dressTypeId
   }
@@ -607,10 +750,42 @@ export const getStyles = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get style by ID
+// @desc    Get style by ID (Public - only if active with active parent hierarchy)
 // @route   GET /api/categories/style/:id
 // @access  Public
 export const getStyle = catchAsync(async (req, res, next) => {
+  const style = await Style.findOne({
+    _id: req.params.id,
+    isActive: true
+  }).populate({
+    path: "dressTypeId",
+    match: { isActive: true },
+    populate: {
+      path: "subCategoryId",
+      match: { isActive: true },
+      populate: {
+        path: "parentCategoryId",
+        match: { isActive: true }
+      }
+    }
+  })
+
+  if (!style || !style.dressTypeId || !style.dressTypeId.subCategoryId || !style.dressTypeId.subCategoryId.parentCategoryId) {
+    return next(new AppError("Style not found", 404))
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      style,
+    },
+  })
+})
+
+// @desc    Get style by ID (Admin - any category)
+// @route   GET /api/categories/style/:id/admin
+// @access  Private/Admin
+export const getStyleForAdmin = catchAsync(async (req, res, next) => {
   const style = await Style.findById(req.params.id).populate({
     path: "dressTypeId",
     populate: {
@@ -639,7 +814,6 @@ export const getStyle = catchAsync(async (req, res, next) => {
 export const updateStyle = catchAsync(async (req, res, next) => {
   const { name, dressTypeId, description, isActive } = req.body
 
-  // Check if dress type exists if it's being updated
   if (dressTypeId) {
     const dressType = await DressType.findById(dressTypeId)
     if (!dressType) {
@@ -647,16 +821,13 @@ export const updateStyle = catchAsync(async (req, res, next) => {
     }
   }
 
-  // Get existing style
   const existingStyle = await Style.findById(req.params.id)
   if (!existingStyle) {
     return next(new AppError("Style not found", 404))
   }
 
-  // Handle image upload
   let image = existingStyle.image
   if (req.file) {
-    // Delete old image if exists
     if (existingStyle.image) {
       const publicId = getPublicIdFromUrl(existingStyle.image)
       await deleteImage(publicId)
@@ -709,7 +880,6 @@ export const deleteStyle = catchAsync(async (req, res, next) => {
     return next(new AppError("Style not found", 404))
   }
 
-  // Delete image from cloudinary if exists
   if (style.image) {
     const publicId = getPublicIdFromUrl(style.image)
     await deleteImage(publicId)
@@ -723,10 +893,66 @@ export const deleteStyle = catchAsync(async (req, res, next) => {
   })
 })
 
-// @desc    Get full category hierarchy
+// @desc    Get full active category hierarchy
 // @route   GET /api/categories/hierarchy
 // @access  Public
 export const getCategoryHierarchy = catchAsync(async (req, res, next) => {
+  const parentCategories = await ParentCategory.find({ isActive: true })
+
+  const hierarchy = await Promise.all(
+    parentCategories.map(async (parentCategory) => {
+      const subCategories = await SubCategory.find({
+        parentCategoryId: parentCategory._id,
+        isActive: true
+      })
+
+      const subCategoriesWithChildren = await Promise.all(
+        subCategories.map(async (subCategory) => {
+          const dressTypes = await DressType.find({
+            subCategoryId: subCategory._id,
+            isActive: true
+          })
+
+          const dressTypesWithStyles = await Promise.all(
+            dressTypes.map(async (dressType) => {
+              const styles = await Style.find({
+                dressTypeId: dressType._id,
+                isActive: true
+              })
+
+              return {
+                ...dressType.toObject(),
+                styles,
+              }
+            }),
+          )
+
+          return {
+            ...subCategory.toObject(),
+            dressTypes: dressTypesWithStyles,
+          }
+        }),
+      )
+
+      return {
+        ...parentCategory.toObject(),
+        subCategories: subCategoriesWithChildren,
+      }
+    }),
+  )
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      hierarchy,
+    },
+  })
+})
+
+// @desc    Get full category hierarchy (Admin - all categories)
+// @route   GET /api/categories/hierarchy/admin
+// @access  Private/Admin
+export const getCategoryHierarchyForAdmin = catchAsync(async (req, res, next) => {
   const parentCategories = await ParentCategory.find()
 
   const hierarchy = await Promise.all(

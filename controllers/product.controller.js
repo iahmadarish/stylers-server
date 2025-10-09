@@ -132,12 +132,12 @@ export const createProduct = async (req, res) => {
             stock: Number.parseInt(s.stock) || 0,
           }
 
-          // ✅ ONLY set variant-specific pricing if explicitly provided
+          // okay: ONLY set variant-specific pricing if explicitly provided
           if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
             variantData.basePrice = Number.parseFloat(variant.basePrice)
           }
 
-          // ✅ CRITICAL FIX: Only set discount fields if explicitly provided
+          // okay: CRITICAL FIX: Only set discount fields if explicitly provided
           // If discountPercentage is provided (even 0), set it explicitly
           if (variant.hasOwnProperty('discountPercentage')) {
             const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
@@ -153,7 +153,7 @@ export const createProduct = async (req, res) => {
               variantData.discountEndTime = null
             }
           } else {
-            // ✅ IMPORTANT: If discountPercentage is NOT provided in the form data,
+            // okay: IMPORTANT: If discountPercentage is NOT provided in the form data,
             // set to null to explicitly indicate NO discount should be applied
             variantData.discountPercentage = null
             variantData.discountStartTime = null
@@ -178,11 +178,11 @@ export const createProduct = async (req, res) => {
       })
     }
 
-    // ✅ CRITICAL FIX: Proper discount time handling
+    // okay: CRITICAL FIX: Proper discount time handling
     const discountStartTime = productData.discountStartTime ? new Date(productData.discountStartTime) : undefined
     const discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : undefined
 
-    // ✅ IMPORTANT: Validate discount times if discount is provided
+    // okay: IMPORTANT: Validate discount times if discount is provided
     const discountPercentage = Number.parseFloat(productData.discountPercentage) || 0
     if (discountPercentage > 0) {
       if (!discountStartTime || !discountEndTime) {
@@ -211,7 +211,7 @@ export const createProduct = async (req, res) => {
       dressTypeId: productData.dressTypeId,
       styleId: productData.styleId,
       basePrice: Number.parseFloat(productData.basePrice),
-      // ✅ CRITICAL: Set discount fields properly
+      // okay: CRITICAL: Set discount fields properly
       discountPercentage: discountPercentage,
       discountStartTime: discountStartTime,
       discountEndTime: discountEndTime,
@@ -242,7 +242,7 @@ export const createProduct = async (req, res) => {
 
     console.log("[DEBUG] About to save product...")
 
-    // ✅ IMPORTANT: Save the product - this will trigger pre-save hooks for price calculation
+    // okay: IMPORTANT: Save the product - this will trigger pre-save hooks for price calculation
     const savedProduct = await newProduct.save()
 
     console.log("[DEBUG] Product saved successfully with calculated prices:")
@@ -360,7 +360,7 @@ export const getProducts = catchAsync(async (req, res, next) => {
     filter["images.colorName"] = { $regex: req.query.color, $options: "i" }
   }
 
-  // ✅ NEW: Product code filtering
+  // okay: NEW: Product code filtering
   if (req.query.productCode) {
     filter["variants.productCode"] = req.query.productCode
   }
@@ -534,12 +534,12 @@ export const updateProduct = catchAsync(async (req, res, next) => {
     // Update the product images
     existingProduct.images = processedImages;
 
-    // ✅ CRITICAL: Update product-level pricing with time validation
+    // okay: CRITICAL: Update product-level pricing with time validation
     if (productData.basePrice !== undefined) {
       existingProduct.basePrice = Number.parseFloat(productData.basePrice);
     }
 
-    // ✅ FIXED: Only update discount times if new values are explicitly provided
+    // okay: FIXED: Only update discount times if new values are explicitly provided
     if (productData.discountPercentage !== undefined) {
       const newDiscountPercentage = Number.parseFloat(productData.discountPercentage) || 0;
       existingProduct.discountPercentage = newDiscountPercentage;
@@ -564,7 +564,7 @@ export const updateProduct = catchAsync(async (req, res, next) => {
       }
     }
 
-    // ✅ Process variants with proper pricing logic
+    // okay: Process variants with proper pricing logic
     if (productData.variants && Array.isArray(productData.variants)) {
       console.log("Processing variants:", productData.variants.length);
 
@@ -578,13 +578,9 @@ export const updateProduct = catchAsync(async (req, res, next) => {
           stock: Number.parseInt(variant.stock) || 0,
           productCode: variant.productCode || generateProductCode(),
         };
-
-        // Handle variant-specific pricing
         if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
           processedVariant.basePrice = Number.parseFloat(variant.basePrice);
         }
-
-        // ✅ FIXED: ভেরিয়েন্ট ডিস্কাউন্ট প্রসেসিং - সঠিকভাবে কম্পেয়ার করা
         if (variant.discountPercentage !== undefined && variant.discountPercentage !== null && variant.discountPercentage !== "") {
           const newVariantDiscountPercentage = Number.parseFloat(variant.discountPercentage);
 
@@ -594,8 +590,6 @@ export const updateProduct = catchAsync(async (req, res, next) => {
             processedVariant.discountEndTime = null;
           } else {
             processedVariant.discountPercentage = newVariantDiscountPercentage;
-
-            // ✅ CORRECTED: নতুন টাইম ভ্যালু সেট করুন (এক্সিস্টিং ভ্যালুর সাথে কম্পেয়ার করার দরকার নেই)
             processedVariant.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : new Date();
             processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null;
           }
@@ -603,13 +597,10 @@ export const updateProduct = catchAsync(async (req, res, next) => {
 
         return processedVariant;
       });
-
       // Calculate total stock from variants
       const totalStock = processedVariants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
-
       existingProduct.variants = processedVariants;
       existingProduct.stock = totalStock;
-
       console.log("Processed variants with pricing:", processedVariants.length);
     }
 
@@ -635,7 +626,7 @@ export const updateProduct = catchAsync(async (req, res, next) => {
       }
     });
 
-    // ✅ IMPORTANT: Save the product
+    //IMPORTANT: Save the product
     const updatedProduct = await existingProduct.save();
 
     await updatedProduct.populate([
@@ -679,19 +670,15 @@ export const updateProduct = catchAsync(async (req, res, next) => {
 // controllers/product.controller.js
 export const deleteProduct = catchAsync(async (req, res, next) => {
   const product = await Product.findById(req.params.id)
-
   if (!product) {
     return next(new AppError("Product not found", 404))
   }
-
   // Delete all product images from cloudinary
   const allImages = []
-
   // Collect images from general images array
   if (product.images && product.images.length > 0) {
     allImages.push(...product.images.map((img) => img.url))
   }
-
   // Collect images from color variants
   if (product.colorVariants && product.colorVariants.length > 0) {
     product.colorVariants.forEach((color) => {
@@ -700,7 +687,6 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
       }
     })
   }
-
   // Delete all collected images
   for (const imageUrl of allImages) {
     try {
@@ -714,7 +700,7 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
   // Delete the product
   await Product.findByIdAndDelete(req.params.id)
 
-  // ✅ FIX: Send proper JSON response instead of 204
+  // FIX: Send proper JSON response instead of 204
   res.status(200).json({
     status: "success",
     message: "Product deleted successfully",
@@ -727,7 +713,6 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
 // @access  Public
 export const getFeaturedProducts = catchAsync(async (req, res, next) => {
   const limit = Number.parseInt(req.query.limit, 10) || 10
-
   const products = await Product.find({ isFeatured: true })
     .sort({ createdAt: -1 })
     .limit(limit)
@@ -751,7 +736,6 @@ export const getFeaturedProducts = catchAsync(async (req, res, next) => {
 export const getProductBySlug = async (req, res) => {
   try {
     const { slug } = req.params
-
     const product = await Product.findOne({ slug }).populate([
       { path: "parentCategoryId", select: "name slug" },
       { path: "subCategoryId", select: "name slug" },
@@ -772,7 +756,7 @@ export const getProductBySlug = async (req, res) => {
   }
 }
 
-// ✅ NEW: Get product by product code
+// NEW: Get product by product code
 export const getProductByCode = async (req, res) => {
   try {
     const { code } = req.params
@@ -787,7 +771,6 @@ export const getProductByCode = async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: "Product not found" })
     }
-
     res.status(200).json(product)
   } catch (error) {
     res.status(500).json({
@@ -801,14 +784,11 @@ export const getProductByCode = async (req, res) => {
 export const getProductImagesByColor = async (req, res) => {
   try {
     const { id, color } = req.params
-
     const product = await Product.findById(id)
     if (!product) {
       return res.status(404).json({ message: "Product not found" })
     }
-
     const images = product.getImagesByColor(color)
-
     res.json({
       success: true,
       color,
@@ -825,14 +805,11 @@ export const getProductImagesByColor = async (req, res) => {
 export const getProductsByHierarchy = async (req, res) => {
   try {
     const { parentCategoryId, subCategoryId, dressTypeId, styleId } = req.params
-
     const filter = { isActive: true }
-
     if (parentCategoryId) filter.parentCategoryId = parentCategoryId
     if (subCategoryId) filter.subCategoryId = subCategoryId
     if (dressTypeId) filter.dressTypeId = dressTypeId
     if (styleId) filter.styleId = styleId
-
     const products = await Product.find(filter).populate([
       { path: "parentCategoryId", select: "name slug image" },
       { path: "subCategoryId", select: "name slug image" },
@@ -857,14 +834,13 @@ export const searchProducts = async (req, res) => {
         message: "Search query is required",
       })
     }
-
     const products = await Product.find({
       $or: [
         { title: { $regex: q, $options: "i" } },
         { description: { $regex: q, $options: "i" } },
         { brand: { $regex: q, $options: "i" } },
         { material: { $regex: q, $options: "i" } },
-        { "variants.productCode": { $regex: q, $options: "i" } }, // ✅ NEW: Search by variant product code
+        { "variants.productCode": { $regex: q, $options: "i" } }, // NEW: Search by variant product code
       ],
       isActive: true,
     }).populate("parentCategoryId subCategoryId dressTypeId styleId")
@@ -902,9 +878,7 @@ export const filterProducts = async (req, res) => {
     } = req.query
 
     console.log("Received filters:", req.query)
-
     const filter = { isActive: true }
-
     // Category filtering
     if (parentCategoryId) {
       if (mongoose.Types.ObjectId.isValid(parentCategoryId)) {
@@ -916,7 +890,6 @@ export const filterProducts = async (req, res) => {
         }
       }
     }
-
     if (subCategoryId) {
       if (mongoose.Types.ObjectId.isValid(subCategoryId)) {
         filter.subCategoryId = subCategoryId
@@ -927,32 +900,27 @@ export const filterProducts = async (req, res) => {
         }
       }
     }
-
     if (dressType) {
       const dressTypeDoc = await DressType.findOne({ slug: dressType })
       if (dressTypeDoc) {
         filter.dressTypeId = dressTypeDoc._id
       }
     }
-
     if (style) {
       const styleDoc = await Style.findOne({ slug: style })
       if (styleDoc) {
         filter.styleId = styleDoc._id
       }
     }
-
     // Color filtering
     if (color) {
       filter["images.colorName"] = { $regex: color, $options: "i" }
     }
-
     // Basic filtering
     if (gender) filter.gender = gender
     if (brand) filter.brand = { $regex: brand, $options: "i" }
     if (material) filter.material = { $regex: material, $options: "i" }
     if (isFeatured) filter.isFeatured = isFeatured === "true"
-
     // Price filtering (using calculated price)
     if (minPrice || maxPrice) {
       filter.price = {}
@@ -962,15 +930,12 @@ export const filterProducts = async (req, res) => {
 
     // Pagination
     const skip = (page - 1) * limit
-
     const products = await Product.find(filter)
       .populate("parentCategoryId subCategoryId dressTypeId styleId")
       .sort(sort)
       .skip(skip)
       .limit(Number(limit))
-
     const total = await Product.countDocuments(filter)
-
     res.json({
       success: true,
       data: {
@@ -1074,7 +1039,7 @@ export const getProductByIdOrSlug = catchAsync(async (req, res, next) => {
   })
 })
 
-// ✅ OPTIMIZED LAZY LOADING ENDPOINTS
+// okay: OPTIMIZED LAZY LOADING ENDPOINTS
 export const getProductBasicInfo = async (req, res) => {
   try {
     const { slug } = req.params
@@ -1145,7 +1110,7 @@ export const getProductPricing = async (req, res) => {
       return res.status(404).json({ status: "error", message: "Product not found" })
     }
 
-    // ✅ NEW: Calculate current price based on discount timing
+    // okay: NEW: Calculate current price based on discount timing
     const now = new Date()
     let currentPrice = product.basePrice
     let isDiscountActive = false
@@ -1160,7 +1125,7 @@ export const getProductPricing = async (req, res) => {
       }
     }
 
-    // ✅ NEW: Calculate variant prices with timing
+    // okay: NEW: Calculate variant prices with timing
     const variantsWithPricing = product.variants.map((variant) => {
       let variantPrice = variant.basePrice || product.basePrice
       let variantDiscountActive = false

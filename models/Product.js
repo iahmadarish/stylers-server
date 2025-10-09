@@ -365,7 +365,7 @@ productSchema.pre("save", async function (next) {
 
     if (isDiscountActive) {
       const discountAmount = (this.basePrice * this.discountPercentage) / 100
-      this.price = Math.round(this.basePrice - discountAmount)
+      this.price = this.basePrice - discountAmount
       console.log(`Main price calculated: ${this.basePrice} - ${discountAmount} = ${this.price}`)
     } else {
       this.price = this.basePrice
@@ -433,7 +433,7 @@ productSchema.pre("save", async function (next) {
       // ✅ Calculate variant price
       if (isVariantDiscountActive) {
         const discountAmount = (variantBasePrice * effectiveDiscountPercentage) / 100
-        variant.price = Math.round(variantBasePrice - discountAmount)
+        variant.price = variantBasePrice - discountAmount
         console.log(`Variant ${index} price calculated: ${variantBasePrice} - ${discountAmount} = ${variant.price}`)
       } else {
         variant.price = variantBasePrice
@@ -599,7 +599,7 @@ productSchema.methods.getCurrentPrice = function (variantId = null) {
 
       if (isActive) {
         const discountAmount = (basePrice * variant.discountPercentage) / 100;
-        return Math.round(basePrice - discountAmount);
+        return basePrice - discountAmount;
       }
     }
     // 2. If variant has NO basePrice AND NO discount → use product discount
@@ -610,7 +610,7 @@ productSchema.methods.getCurrentPrice = function (variantId = null) {
       nowUTC >= this.discountStartTime &&
       nowUTC <= this.discountEndTime) {
       const discountAmount = (basePrice * this.discountPercentage) / 100;
-      return Math.round(basePrice - discountAmount);
+      return basePrice - discountAmount;
     }
     // 3. If variant has basePrice BUT NO discount → NO discount (only basePrice)
 
@@ -623,7 +623,7 @@ productSchema.methods.getCurrentPrice = function (variantId = null) {
       nowUTC >= this.discountStartTime &&
       nowUTC <= this.discountEndTime) {
       const discountAmount = (this.basePrice * this.discountPercentage) / 100;
-      return Math.round(this.basePrice - discountAmount);
+      return this.basePrice - discountAmount;
     }
 
     return this.basePrice;
@@ -725,7 +725,7 @@ productSchema.statics.updateDiscountPrices = async function () {
       if (shouldHaveDiscountedPrice && !currentlyHasDiscountedPrice) {
         // active discount checking start time
         const discountAmount = (product.basePrice * product.discountPercentage) / 100;
-        product.price = Math.round(product.basePrice - discountAmount);
+        product.price = product.basePrice - discountAmount;
         needsUpdate = true;
         console.log(`[ACTIVATE] Setting discounted price: ${product.price}`);
       } else if (!shouldHaveDiscountedPrice && currentlyHasDiscountedPrice) {
@@ -736,7 +736,7 @@ productSchema.statics.updateDiscountPrices = async function () {
       } else if (shouldHaveDiscountedPrice) {
         // changing price calculate discoulnt and baseprice
         const discountAmount = (product.basePrice * product.discountPercentage) / 100;
-        const newPrice = Math.round(product.basePrice - discountAmount);
+        const newPrice = product.basePrice - discountAmount;
         if (product.price !== newPrice) {
           product.price = newPrice;
           needsUpdate = true;
@@ -775,7 +775,7 @@ productSchema.statics.updateDiscountPrices = async function () {
 
           if (shouldHaveVariantDiscount && !currentlyHasVariantDiscount) {
             const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
-            variant.price = Math.round(variantBasePrice - discountAmount);
+            variant.price = variantBasePrice - discountAmount;
             needsUpdate = true;
             console.log(`[ACTIVATE] Variant discounted price: ${variant.price}`);
           } else if (!shouldHaveVariantDiscount && currentlyHasVariantDiscount) {
@@ -784,7 +784,7 @@ productSchema.statics.updateDiscountPrices = async function () {
             console.log(`[DEACTIVATE] Variant base price: ${variant.price}`);
           } else if (shouldHaveVariantDiscount) {
             const discountAmount = (variantBasePrice * effectiveDiscount) / 100;
-            const newVariantPrice = Math.round(variantBasePrice - discountAmount);
+            const newVariantPrice = variantBasePrice - discountAmount;
             if (variant.price !== newVariantPrice) {
               variant.price = newVariantPrice;
               needsUpdate = true;

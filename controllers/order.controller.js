@@ -157,254 +157,7 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// NEW: Create guest order - FIXED VERSION
-// export const createGuestOrder = async (req, res) => {
-//   try {
-//     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
 
-//     const {
-//       customerInfo,
-//       shippingAddress,
-//       billingAddress,
-//       items,
-//       paymentMethod,
-//       shippingCost = 0,
-//       specialInstructions = "",
-//     } = req.body;
-
-//     // Detailed validation with specific error messages
-//     if (!customerInfo) {
-//       return res.status(400).json({ message: "Customer information is required" });
-//     }
-
-//     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
-//       return res.status(400).json({
-//         message: "Customer name, email, and phone are required",
-//         missing: {
-//           name: !customerInfo.name,
-//           email: !customerInfo.email,
-//           phone: !customerInfo.phone,
-//         },
-//       });
-//     }
-
-//     if (!shippingAddress) {
-//       return res.status(400).json({ message: "Shipping address is required" });
-//     }
-
-//     if (!shippingAddress.address || !shippingAddress.city) {
-//       return res.status(400).json({
-//         message: "Shipping address and city are required",
-//         missing: {
-//           address: !shippingAddress.address,
-//           city: !shippingAddress.city,
-//         },
-//       });
-//     }
-
-//     if (!items || !Array.isArray(items) || items.length === 0) {
-//       return res.status(400).json({ message: "Order items are required" });
-//     }
-
-//     if (!paymentMethod) {
-//       return res.status(400).json({ message: "Payment method is required" });
-//     }
-
-//     // Prepare order items with detailed pricing
-//     const orderItems = [];
-//     let calculatedSubtotal = 0;
-//     let calculatedTotalDiscount = 0;
-
-//     for (const item of items) {
-//       // Fetch product details to ensure data integrity
-//       const product = await Product.findById(item.productId);
-//       if (!product) {
-//         return res.status(400).json({ message: `Product not found: ${item.productId}` });
-//       }
-
-//       // Get variant details if exists
-//       let variantDetails = null;
-//       if (item.variantId) {
-//         variantDetails = product.variants.id(item.variantId);
-//       }
-
-//       // Get color variant details if exists
-//       let colorVariantDetails = null;
-//       if (item.colorVariantId) {
-//         // Fix: Check if colorVariants exists and is an array before calling methods on it
-//         if (product.colorVariants && Array.isArray(product.colorVariants)) {
-//           if (item.colorVariantId.startsWith('#')) {
-//             // It's a color code, find by colorCode
-//             colorVariantDetails = product.colorVariants.find(
-//               cv => cv && cv.colorCode === item.colorVariantId
-//             );
-//           } else {
-//             // It's an ObjectId, try to find by ID
-//             try {
-//               colorVariantDetails = product.colorVariants.id(item.colorVariantId);
-//             } catch (error) {
-//               console.log("Error finding color variant by ID:", error.message);
-//               // Fallback: try to find by colorCode if ID search fails
-//               colorVariantDetails = product.colorVariants.find(
-//                 cv => cv && cv.colorCode === item.colorVariantId
-//               );
-//             }
-//           }
-//         } else {
-//           console.log("Warning: Product colorVariants is not an array or is undefined");
-//         }
-//       }
-
-//       const totalOriginalPrice = item.originalPrice * item.quantity;
-//       const totalDiscountedPrice = item.discountedPrice * item.quantity;
-//       const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
-
-//       const orderItem = {
-//         productId: product._id,
-//         productTitle: item.productTitle || product.title,
-//         productImage:
-//           item.productImage ||
-//           (colorVariantDetails && colorVariantDetails.images && colorVariantDetails.images[0]) ||
-//           (product.images && product.images[0]) ||
-//           "/placeholder.svg?height=200&width=200",
-//         variantId: item.variantId,
-//         variantDetails: variantDetails
-//           ? {
-//             size: variantDetails.size,
-//             dimension: variantDetails.dimension,
-//           }
-//           : null,
-//         // FIX: Only set colorVariantId if it's a valid ObjectId, not color code
-//         colorVariantId: item.colorVariantId && item.colorVariantId.startsWith('#') ? null : item.colorVariantId,
-//         colorVariantDetails: colorVariantDetails
-//           ? {
-//             name: colorVariantDetails.name,
-//             code: colorVariantDetails.code,
-//           }
-//           : null,
-//         quantity: item.quantity,
-//         originalPrice: item.originalPrice,
-//         discountedPrice: item.discountedPrice,
-//         discountPercentage: item.discountPercentage || 0,
-//         totalOriginalPrice,
-//         totalDiscountedPrice,
-//         discountAmount: Math.max(0, itemDiscountAmount),
-//       };
-
-//       orderItems.push(orderItem);
-//       calculatedSubtotal += totalDiscountedPrice;
-//       calculatedTotalDiscount += itemDiscountAmount;
-//     }
-
-//     const calculatedTotalAmount = calculatedSubtotal + shippingCost;
-
-//     // Generate unique order number for guest
-//     const orderNumber = `GUEST-${Date.now()}-${Math.floor(Math.random() * 10000)
-//       .toString()
-//       .padStart(4, "0")}`;
-
-//     // Prepare billing address - handle both cases
-//     const finalBillingAddress =
-//       billingAddress?.sameAsShipping !== false
-//         ? {
-//           fullName: shippingAddress.fullName || customerInfo.name,
-//           phone: shippingAddress.phone || customerInfo.phone,
-//           email: shippingAddress.email || customerInfo.email,
-//           address: shippingAddress.address,
-//           city: shippingAddress.city,
-//           state: shippingAddress.state || "",
-//           zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
-//           country: shippingAddress.country || "Bangladesh",
-//           sameAsShipping: true,
-//         }
-//         : {
-//           fullName: billingAddress.fullName || customerInfo.name,
-//           phone: billingAddress.phone || customerInfo.phone,
-//           email: billingAddress.email || customerInfo.email,
-//           address: billingAddress.address,
-//           city: billingAddress.city,
-//           state: billingAddress.state || "",
-//           zipCode: billingAddress.zipCode || billingAddress.postalCode || "",
-//           country: billingAddress.country || "Bangladesh",
-//           sameAsShipping: false,
-//         };
-
-//     // Create guest order
-//     const order = new Order({
-//       isGuestOrder: true,
-//       guestCustomerInfo: {
-//         name: customerInfo.name,
-//         email: customerInfo.email,
-//         phone: customerInfo.phone,
-//       },
-//       orderNumber,
-//       items: orderItems,
-//       subtotal: calculatedSubtotal,
-//       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
-//       shippingCost,
-//       totalAmount: calculatedTotalAmount,
-//       shippingAddress: {
-//         fullName: shippingAddress.fullName || customerInfo.name,
-//         phone: shippingAddress.phone || customerInfo.phone,
-//         email: shippingAddress.email || customerInfo.email,
-//         address: shippingAddress.address,
-//         city: shippingAddress.city,
-//         state: shippingAddress.state || "",
-//         zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
-//         country: shippingAddress.country || "Bangladesh",
-//       },
-//       billingAddress: finalBillingAddress,
-//       paymentMethod,
-//       specialInstructions,
-//       status: "confirmed",
-//       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
-//     });
-
-//     console.log("Creating order with data:", JSON.stringify(order.toObject(), null, 2));
-
-//     await order.save();
-
-//     // Send confirmation email using the new helper function
-//     try {
-//       const guestEmail = order.guestCustomerInfo.email;
-//       const emailResult = await sendOrderEmails(order, order.guestCustomerInfo.email, true); // true = guest order
-
-//       if (emailResult.success) {
-//         console.log('✅ Guest confirmation email sent successfully');
-//       } else {
-//         console.error('❌ Failed to send guest email:', emailResult.error);
-//       }
-//     } catch (emailError) {
-//       console.error('❌ Guest email sending error:', emailError.message);
-//     }
-
-//     // Update product stock
-//     await updateProductStock(orderItems);
-
-//     res.status(201).json({
-//       status: "success",
-//       message: "Guest order created successfully",
-//       data: {
-//         order,
-//         orderNumber: order.orderNumber,
-//         trackingInfo: {
-//           orderNumber: order.orderNumber,
-//           email: customerInfo.email,
-//         },
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Create guest order error:", error);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: error.message,
-//       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-//     });
-//   }
-// };
-
-
-// order.controller.js - createGuestOrder ফাংশন আপডেট করুন
 export const createGuestOrder = async (req, res) => {
   try {
     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
@@ -419,7 +172,6 @@ export const createGuestOrder = async (req, res) => {
       specialInstructions = "",
     } = req.body;
 
-    // Detailed validation with specific error messages
     if (!customerInfo) {
       return res.status(400).json({ message: "Customer information is required" });
     }
@@ -761,38 +513,72 @@ export const trackGuestOrder = async (req, res) => {
 // In order.controller.js - update the getOrders function
 export const getOrders = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, orderType = "all", search } = req.query
+    const { 
+      page = 1, 
+      limit = 10, 
+      status, 
+      paymentStatus,
+      orderType = "all", 
+      search,
+      fromDate,
+      toDate 
+    } = req.query
 
     const filter = {}
+    
+    // Status filter
     if (status && status !== "all") {
       filter.status = status
     }
 
-    // Filter by order type
+    // Payment status filter (NEW)
+    if (paymentStatus && paymentStatus !== "all") {
+      filter.paymentStatus = paymentStatus
+    }
+
+    // Order type filter
     if (orderType === "guest") {
       filter.isGuestOrder = true
     } else if (orderType === "user") {
       filter.isGuestOrder = { $ne: true }
     }
 
-    // Add search functionality
+    // Date range filter (NEW)
+    if (fromDate || toDate) {
+      filter.createdAt = {}
+      
+      if (fromDate) {
+        // Start of the day for fromDate
+        const startDate = new Date(fromDate)
+        startDate.setHours(0, 0, 0, 0)
+        filter.createdAt.$gte = startDate
+      }
+      
+      if (toDate) {
+        // End of the day for toDate
+        const endDate = new Date(toDate)
+        endDate.setHours(23, 59, 59, 999)
+        filter.createdAt.$lte = endDate
+      }
+    }
+
+    // Search functionality
     if (search) {
       const searchRegex = new RegExp(search, 'i')
 
-      // Create an array of search conditions
       const searchConditions = [
         { orderNumber: searchRegex },
         { transactionId: searchRegex }
       ]
 
-      // Check if search term could be a phone number (digits only)
+      // Phone number search
       if (/^\d+$/.test(search)) {
         searchConditions.push(
           { 'shippingAddress.phone': searchRegex },
           { 'guestCustomerInfo.phone': searchRegex }
         )
       } else {
-        // Search by name and email for non-numeric searches
+        // Name and email search
         searchConditions.push(
           { 'shippingAddress.fullName': searchRegex },
           { 'guestCustomerInfo.name': searchRegex },
@@ -800,7 +586,6 @@ export const getOrders = async (req, res) => {
           { 'shippingAddress.email': searchRegex }
         )
 
-        // If search includes @, prioritize email search
         if (search.includes('@')) {
           searchConditions.push(
             { 'guestCustomerInfo.email': searchRegex },
@@ -809,7 +594,6 @@ export const getOrders = async (req, res) => {
         }
       }
 
-      // Use $or operator to search across multiple fields
       filter.$or = searchConditions
     }
 
@@ -1281,78 +1065,6 @@ export const getSalesData = async (req, res) => {
     });
   }
 };
-
-
-// export const getOrderStatusData = async (req, res) => {
-//   try {
-//     const { range = 'all' } = req.query;
-
-//     const dateFilter = {};
-//     if (range !== 'all') {
-//       const now = new Date();
-//       switch (range) {
-//         case '7days':
-//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
-//           break;
-//         case '30days':
-//           dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
-//           break;
-//         case '6months':
-//           dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
-//           break;
-//       }
-//     }
-
-//     const orderStatusCounts = await Order.aggregate([
-//       {
-//         $match: dateFilter
-//       },
-//       {
-//         $group: {
-//           _id: '$status',
-//           count: { $sum: 1 }
-//         }
-//       }
-//     ]);
-
-//     const totalOrders = orderStatusCounts.reduce((sum, item) => sum + item.count, 0);
-
-//     const statusColors = {
-//       'confirmed': '#10B981',
-//       'processing': '#3B82F6',
-//       'shipped': '#8B5CF6',
-//       'delivered': '#059669',
-//       'pending': '#F59E0B',
-//       'cancelled': '#EF4444'
-//     };
-
-//     const statusLabels = {
-//       'confirmed': 'Confirmed',
-//       'processing': 'Processing',
-//       'shipped': 'Shipped',
-//       'delivered': 'Delivered',
-//       'pending': 'Pending',
-//       'cancelled': 'Cancelled'
-//     };
-
-//     const orderStatusData = orderStatusCounts.map(item => ({
-//       name: statusLabels[item._id] || item._id,
-//       value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
-//       color: statusColors[item._id] || '#6B7280'
-//     }));
-
-//     res.json({
-//       status: 'success',
-//       data: orderStatusData
-//     });
-
-//   } catch (error) {
-//     res.status(500).json({
-//       status: 'error',
-//       message: error.message
-//     });
-//   }
-// };
 
 export const getOrderStatusData = async (req, res) => {
   try {

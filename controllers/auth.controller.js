@@ -411,6 +411,98 @@ export const getMe = catchAsync(async (req, res, next) => {
 })
 
 
+// export const forgotPassword = catchAsync(async (req, res, next) => {
+//   const { emailOrPhone } = req.body;
+
+//   console.log("🔐 Forgot password request for:", emailOrPhone);
+
+//   if (!emailOrPhone) {
+//     return next(new AppError("Please provide email or phone number", 400));
+//   }
+
+//   // Detect input type
+//   const inputType = detectInputType(emailOrPhone);
+//   console.log("🔍 Detected input type:", inputType);
+
+//   // Get user
+//   const user = await User.findOne({
+//     $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+//   });
+
+//   if (!user) {
+//     return next(new AppError("There is no user with that email or phone number", 404));
+//   }
+
+//   console.log("👤 User found:", user.name, user.email || user.phone);
+
+//   try {
+//     if (inputType === "email" && user.email) {
+//       // 👉 Email case: Reset link
+//       const resetToken = user.generatePasswordResetToken();
+//       await user.save({ validateBeforeSave: false });
+
+//       const resetURL = `${process.env.FRONTEND_URL || "https://paarel.com"}/reset-password/${resetToken}`;
+//       console.log("🔗 Reset URL generated:", resetURL);
+
+//       await sendEmail({
+//         email: user.email,
+//         subject: "Password Reset Request",
+//         html: `
+//           <h1>Password Reset</h1>
+//           <p>Click the link below to reset your password:</p>
+//           <a href="${resetURL}">${resetURL}</a>
+//           <p>This link will expire in 10 minutes.</p>
+//         `,
+//       });
+
+//       console.log("✅ Password reset email sent successfully");
+
+//       res.status(200).json({
+//         status: "success",
+//         message: "Password reset link has been sent to your email address",
+//       });
+
+//     } else if (inputType === "phone" && user.phone) {
+//       // 👉 Phone case: OTP
+//       const otp = generateOTP();
+//       const otpToken = crypto.randomBytes(32).toString("hex");
+
+//       user.phoneOTP = otp;
+//       user.phoneOTPExpires = Date.now() + 10 * 60 * 1000; // 10 min
+//       user.phoneOTPToken = crypto.createHash("sha256").update(otpToken).digest("hex");
+//       await user.save({ validateBeforeSave: false });
+
+//       await sendSMS({
+//         phone: user.phone,
+//         message: `Your password reset code is: ${otp}. It will expire in 10 minutes.`,
+//       });
+
+//       console.log("✅ Password reset OTP sent via SMS");
+
+//       res.status(200).json({
+//         status: "success",
+//         message: "Password reset OTP has been sent to your phone number",
+//         token: otpToken, // client এর দরকার হবে verify করার সময়
+//       });
+
+//     } else {
+//       return next(new AppError("User contact information not available", 400));
+//     }
+
+//   } catch (error) {
+//     console.error("❌ Error sending reset link/OTP:", error);
+
+//     user.resetPasswordToken = undefined;
+//     user.resetPasswordExpires = undefined;
+//     user.phoneOTP = undefined;
+//     user.phoneOTPExpires = undefined;
+//     user.phoneOTPToken = undefined;
+//     await user.save({ validateBeforeSave: false });
+
+//     return next(new AppError("There was an error sending the reset code. Please try again later.", 500));
+//   }
+// });
+
 
 export const forgotPassword = catchAsync(async (req, res, next) => {
   const { emailOrPhone } = req.body

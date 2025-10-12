@@ -146,7 +146,6 @@ cron.schedule('* * * * *', async () => {
     console.error('[CRON] Error in discount update:', error);
   }
 });
-
 startCronJobs();
 
 

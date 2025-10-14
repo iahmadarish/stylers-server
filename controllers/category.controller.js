@@ -349,20 +349,34 @@ export const updateSubCategory = catchAsync(async (req, res, next) => {
     image = req.file.path
   }
 
+const updateFields = { 
+    name,
+    parentCategoryId,
+    description,
+    isActive: isActive === "true" || isActive === true,
+}
+
+
+if (req.file) {
+    if (existingSubCategory.image) {
+        const publicId = getPublicIdFromUrl(existingSubCategory.image)
+        await deleteImage(publicId)
+    }
+    updateFields.image = req.file.path
+} else if (req.body.removeImage === "true" && existingSubCategory.image) { // <-- নতুন: রিমুভ করার লজিক যোগ করা হলো
+    await deleteImage(getPublicIdFromUrl(existingSubCategory.image))
+    updateFields.image = null // <-- ডেটাবেসে ইমেজ ফিল্ড null করা হলো
+}
+
+
   const subCategory = await SubCategory.findByIdAndUpdate(
     req.params.id,
+    updateFields, // <-- পরিবর্তন: updateFields অবজেক্ট ব্যবহার করা হলো
     {
-      name,
-      parentCategoryId,
-      description,
-      isActive: isActive === "true" || isActive === true,
-      image,
+        new: true,
+        runValidators: true,
     },
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).populate("parentCategoryId")
+).populate("parentCategoryId")
 
   if (!subCategory) {
     return next(new AppError("Sub category not found", 404))
@@ -587,25 +601,35 @@ export const updateDressType = catchAsync(async (req, res, next) => {
     image = req.file.path
   }
 
-  const dressType = await DressType.findByIdAndUpdate(
+
+
+
+  const updateFields = { 
+    name,
+    subCategoryId, 
+    description,
+    isActive: isActive === "true" || isActive === true,
+}
+
+  if (req.file) {
+    if (existingDressType.image) {
+        const publicId = getPublicIdFromUrl(existingDressType.image)
+        await deleteImage(publicId)
+    }
+    updateFields.image = req.file.path
+} else if (req.body.removeImage === "true" && existingDressType.image) { 
+    await deleteImage(getPublicIdFromUrl(existingDressType.image))
+    updateFields.image = null
+}
+
+ const dressType = await DressType.findByIdAndUpdate(
     req.params.id,
+    updateFields,
     {
-      name,
-      subCategoryId,
-      description,
-      isActive: isActive === "true" || isActive === true,
-      image,
+        new: true,
+        runValidators: true,
     },
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).populate({
-    path: "subCategoryId",
-    populate: {
-      path: "parentCategoryId",
-    },
-  })
+).populate("subCategoryId")
 
   if (!dressType) {
     return next(new AppError("Dress type not found", 404))
@@ -835,28 +859,33 @@ export const updateStyle = catchAsync(async (req, res, next) => {
     image = req.file.path
   }
 
-  const style = await Style.findByIdAndUpdate(
+
+
+ const updateFields = { 
+    name,
+    dressTypeId, // Style-এর ক্ষেত্রে এটি dressTypeId হবে
+    description,
+    isActive: isActive === "true" || isActive === true,
+}
+
+if (req.file) {
+    if (existingStyle.image) {
+        const publicId = getPublicIdFromUrl(existingStyle.image)
+        await deleteImage(publicId)
+    }
+    updateFields.image = req.file.path
+} else if (req.body.removeImage === "true" && existingStyle.image) {
+    await deleteImage(getPublicIdFromUrl(existingStyle.image))
+    updateFields.image = null 
+}
+const style = await Style.findByIdAndUpdate(
     req.params.id,
+    updateFields, 
     {
-      name,
-      dressTypeId,
-      description,
-      isActive: isActive === "true" || isActive === true,
-      image,
+        new: true,
+        runValidators: true,
     },
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).populate({
-    path: "dressTypeId",
-    populate: {
-      path: "subCategoryId",
-      populate: {
-        path: "parentCategoryId",
-      },
-    },
-  })
+).populate("dressTypeId")
 
   if (!style) {
     return next(new AppError("Style not found", 404))

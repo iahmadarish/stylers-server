@@ -207,7 +207,7 @@ app.get("/api", (req, res) => {
 
 
 
-app.get("/sitemap-products.xml", async (req, res) => {
+app.get("/api/sitemap-products.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
     const products = await Product.find({ isActive: true }, "slug updatedAt");

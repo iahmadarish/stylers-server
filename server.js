@@ -205,6 +205,40 @@ app.get("/api", (req, res) => {
   })
 })
 
+
+
+app.get("/sitemap-products.xml", async (req, res) => {
+  try {
+    const baseUrl = "https://paarel.com";
+    const products = await Product.find({ isActive: true }, "slug updatedAt");
+
+    let urls = "";
+    products.forEach((p) => {
+      urls += `
+        <url>
+          <loc>${baseUrl}/products/item/${p.slug}</loc>
+          <lastmod>${p.updatedAt.toISOString()}</lastmod>
+          <priority>0.8</priority>
+        </url>
+      `;
+    });
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      ${urls}
+      </urlset>
+    `;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (error) {
+    console.error("Sitemap Error:", error);
+    res.status(500).send("Error generating sitemap");
+  }
+});
+
+
+
 // 404 handler
 app.use("*", (req, res) => {
   res.status(404).json({

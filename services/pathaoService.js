@@ -1,12 +1,22 @@
 import axios from 'axios';
 
-// Pathao API credentials
-const PATHAO_CLIENT_ID = 'openR4Ee7A';
-const PATHAO_CLIENT_SECRET = 'Czf5H6wQ0qdyD5gEN2hjQFVF1sS6KZRMtMfTR2L5';
-const PATHAO_USERNAME = 'nayem.cdab@gmail.com';
+// Pathao real API credentials 
+// const PATHAO_CLIENT_ID = 'openR4Ee7A';
+// const PATHAO_CLIENT_SECRET = 'Czf5H6wQ0qdyD5gEN2hjQFVF1sS6KZRMtMfTR2L5';
+// const PATHAO_USERNAME = 'nayem.cdab@gmail.com';
+// const PATHAO_PASSWORD = 'Life0304@';
+// const PATHAO_BASE_URL = 'https://api-hermes.pathao.com';
+// const PATHAO_STORE_ID = 165272;
+
+// fake api credendital
+const PATHAO_CLIENT_ID = 'sdfadf';
+const PATHAO_CLIENT_SECRET = 'jklfjsdf';
+const PATHAO_USERNAME = 'idemo.cdab@gmail.com';
 const PATHAO_PASSWORD = 'Life0304@';
-const PATHAO_BASE_URL = 'https://api-hermes.pathao.com';
-const PATHAO_STORE_ID = 165272;
+const PATHAO_BASE_URL = 'https://api-hermes.pathao.comss';
+const PATHAO_STORE_ID = 345789345;
+
+
 
 export { PATHAO_BASE_URL };
 

@@ -505,10 +505,11 @@ export const getMe = catchAsync(async (req, res, next) => {
 
 
 export const forgotPassword = catchAsync(async (req, res, next) => {
-  const { emailOrPhone, clientDomain } = req.body // <-- clientDomain এখানে যুক্ত করা হয়েছে
+  // 1. Get input and clientDomain from request body
+  const { emailOrPhone, clientDomain } = req.body
 
   console.log("🔐 Forgot password request for:", emailOrPhone)
-  console.log("🌍 Client specified domain:", clientDomain) // <-- নতুন লগ
+  console.log("🌍 Client specified domain:", clientDomain) // রিকোয়েস্ট ডোমেইন লগ করা হলো
 
   if (!emailOrPhone) {
     return next(new AppError("Please provide email or phone number", 400))
@@ -518,7 +519,7 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
   const inputType = detectInputType(emailOrPhone)
   console.log("🔍 Detected input type:", inputType)
 
-  // Get user based on email or phone
+  // 2. Get user based on email or phone
   const user = await User.findOne({
     $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
   })
@@ -529,29 +530,25 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
 
   console.log("👤 User found:", user.name, user.email || user.phone, `Role: ${user.role}`)
 
-  // --- START: Added logic to determine reset URL based on user role and clientDomain ---
+  // --- 3. Dynamic Reset URL Logic based on Role and Client Domain ---
   let frontendBaseURL = process.env.FRONTEND_URL || "https://paarel.com"
 
   // Check if the user is an admin or executive
   if (user.role === 'admin' || user.role === 'executive') {
     
-    // 1. Priority: Use the domain sent by the client (e.g., "https://admin.paarel.com")
-    if (clientDomain && (clientDomain.includes('paarel.com') || clientDomain.includes('vercel.app'))) {
+    const vercelDomain = "https://stylersoutfit-dashboard-amtv.vercel.app"
+    const adminDomain = "https://admin.paarel.com"
+
+    // 1. Priority: Use clientDomain if it is one of the allowed admin/executive domains
+    if (clientDomain === vercelDomain || clientDomain === adminDomain) {
         frontendBaseURL = clientDomain
     } 
-    // 2. Fallback: Use Environment Variable
-    else if (process.env.ADMIN_FRONTEND_URL) {
-        frontendBaseURL = process.env.ADMIN_FRONTEND_URL
-    }
-    // 3. Fallback: Use Hardcoded Role-Specific URLs
-    else if (user.role === 'admin') {
-        frontendBaseURL = "https://admin.paarel.com"
-    } else if (user.role === 'executive') {
-        frontendBaseURL = "https://stylersoutfit-dashboard-amtv.vercel.app"
-    }
-    // 4. Final Admin Fallback
-    else {
-        frontendBaseURL = "https://admin.paarel.com"
+    // 2. Fallback: Role-Specific Hardcoded URL (if clientDomain is missing or invalid)
+    else if (user.role === 'executive') {
+        frontendBaseURL = vercelDomain
+    } else {
+        // Default for 'admin' role
+        frontendBaseURL = adminDomain
     }
     
     console.log(`Final Admin/Executive Reset URL set to: ${frontendBaseURL}`)
@@ -562,18 +559,17 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
   // --- END: Dynamic URL Logic ---
 
   if (inputType === "email" && user.email) {
-    // ... (rest of the email logic is the same)
+    // 4. Email Reset Logic
     const resetToken = user.generatePasswordResetToken()
     await user.save({ validateBeforeSave: false })
 
-    // Use the determined frontendBaseURL
     const resetURL = `${frontendBaseURL}/reset-password/${resetToken}`
-    
-    // ... (rest of the email sending logic)
+
     try {
       await sendEmail({
         email: user.email,
         subject: "Password Reset Request",
+        // Using the dynamic resetURL
         html: `Your password reset link: ${resetURL}. This link will expire in 10 minutes.`,
       })
 
@@ -583,13 +579,14 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
         method: "email"
       })
     } catch (error) {
+      // Rollback user state on email failure
       user.resetPasswordToken = undefined
       user.resetPasswordExpires = undefined
       await user.save({ validateBeforeSave: false })
       return next(new AppError("There was an error sending the reset email. Please try again later.", 500))
     }
   } else if (inputType === "phone" && user.phone) {
-    // ... (phone logic remains the same)
+    // 5. Phone Reset Logic (OTP)
     const otp = generateOTP()
     const otpToken = crypto.randomBytes(32).toString("hex")
 
@@ -612,6 +609,7 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
         phone: user.phone
       })
     } catch (error) {
+      // Rollback user state on SMS failure
       user.phoneOTP = undefined
       user.phoneOTPExpires = undefined
       user.phoneOTPToken = undefined
@@ -619,6 +617,7 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
       return next(new AppError("There was an error sending the SMS. Please try again later.", 500))
     }
   } else {
+    // 6. Final Fallback
     return next(new AppError("User contact information not available for selected method", 400))
   }
 })

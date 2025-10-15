@@ -505,9 +505,10 @@ export const getMe = catchAsync(async (req, res, next) => {
 
 
 export const forgotPassword = catchAsync(async (req, res, next) => {
-  const { emailOrPhone } = req.body
+  const { emailOrPhone, clientDomain } = req.body // <-- clientDomain এখানে যুক্ত করা হয়েছে
 
   console.log("🔐 Forgot password request for:", emailOrPhone)
+  console.log("🌍 Client specified domain:", clientDomain) // <-- নতুন লগ
 
   if (!emailOrPhone) {
     return next(new AppError("Please provide email or phone number", 400))
@@ -526,15 +527,49 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
     return next(new AppError("There is no user with that email or phone number", 404))
   }
 
-  console.log("👤 User found:", user.name, user.email || user.phone)
+  console.log("👤 User found:", user.name, user.email || user.phone, `Role: ${user.role}`)
+
+  // --- START: Added logic to determine reset URL based on user role and clientDomain ---
+  let frontendBaseURL = process.env.FRONTEND_URL || "https://paarel.com"
+
+  // Check if the user is an admin or executive
+  if (user.role === 'admin' || user.role === 'executive') {
+    
+    // 1. Priority: Use the domain sent by the client (e.g., "https://admin.paarel.com")
+    if (clientDomain && (clientDomain.includes('paarel.com') || clientDomain.includes('vercel.app'))) {
+        frontendBaseURL = clientDomain
+    } 
+    // 2. Fallback: Use Environment Variable
+    else if (process.env.ADMIN_FRONTEND_URL) {
+        frontendBaseURL = process.env.ADMIN_FRONTEND_URL
+    }
+    // 3. Fallback: Use Hardcoded Role-Specific URLs
+    else if (user.role === 'admin') {
+        frontendBaseURL = "https://admin.paarel.com"
+    } else if (user.role === 'executive') {
+        frontendBaseURL = "https://stylersoutfit-dashboard-amtv.vercel.app"
+    }
+    // 4. Final Admin Fallback
+    else {
+        frontendBaseURL = "https://admin.paarel.com"
+    }
+    
+    console.log(`Final Admin/Executive Reset URL set to: ${frontendBaseURL}`)
+  } else {
+    // Standard User: Use default FRONTEND_URL
+    console.log(`Setting standard user reset URL to: ${frontendBaseURL}`)
+  }
+  // --- END: Dynamic URL Logic ---
 
   if (inputType === "email" && user.email) {
-    // Email for  reset link send 
+    // ... (rest of the email logic is the same)
     const resetToken = user.generatePasswordResetToken()
     await user.save({ validateBeforeSave: false })
 
-    const resetURL = `${process.env.FRONTEND_URL || "https://paarel.com"}/reset-password/${resetToken}`
-
+    // Use the determined frontendBaseURL
+    const resetURL = `${frontendBaseURL}/reset-password/${resetToken}`
+    
+    // ... (rest of the email sending logic)
     try {
       await sendEmail({
         email: user.email,
@@ -545,13 +580,16 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
       res.status(200).json({
         status: "success",
         message: "Password reset link has been sent to your email address",
-        method: "email" // Frontend message that confirmed reset link has been sent
+        method: "email"
       })
     } catch (error) {
-      // Error handling
+      user.resetPasswordToken = undefined
+      user.resetPasswordExpires = undefined
+      await user.save({ validateBeforeSave: false })
+      return next(new AppError("There was an error sending the reset email. Please try again later.", 500))
     }
   } else if (inputType === "phone" && user.phone) {
-    // send otp in phone
+    // ... (phone logic remains the same)
     const otp = generateOTP()
     const otpToken = crypto.randomBytes(32).toString("hex")
 
@@ -569,13 +607,19 @@ export const forgotPassword = catchAsync(async (req, res, next) => {
       res.status(200).json({
         status: "success",
         message: "Password reset OTP has been sent to your phone number",
-        method: "phone", // 
-        token: otpToken, // 
-        phone: user.phone // Masked phone number (optional)
+        method: "phone",
+        token: otpToken,
+        phone: user.phone
       })
     } catch (error) {
-      // Error handling
+      user.phoneOTP = undefined
+      user.phoneOTPExpires = undefined
+      user.phoneOTPToken = undefined
+      await user.save({ validateBeforeSave: false })
+      return next(new AppError("There was an error sending the SMS. Please try again later.", 500))
     }
+  } else {
+    return next(new AppError("User contact information not available for selected method", 400))
   }
 })
 

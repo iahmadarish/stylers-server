@@ -62,7 +62,7 @@ router.get("/hierarchy/:parentCategoryId/:subCategoryId?/:dressTypeId?/:styleId?
 router.get("/:id/images/:color", getProductImagesByColor)
 
 
-router.get("/", getProducts)
+// router.get("/", getProducts)
 router.get("/:productId/reviews", getProductReviews)
 
 router.get('/by-sub/:subId', async (req, res) => {
@@ -118,7 +118,7 @@ router.get("/:slug/pricing", getProductPricing);
 router.get("/:slug/reviews", getProductReviews)
 
 
-// আপনার product routes এ নিচের মতো করে প্রাইস ফেচ করুন
+
 export const getProduct = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -158,6 +158,7 @@ export const getProduct = async (req, res) => {
 
 // Admin routes
 router.use(protect)
+router.get("/", getProducts) 
 router.use(restrictTo("admin", "executive"))
 router.post("/", productUpload.array("images", 50), createProduct)
 router.route("/:id")

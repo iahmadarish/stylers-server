@@ -301,9 +301,17 @@ export const getProducts = catchAsync(async (req, res, next) => {
   // Build filter object
   const filter = {}
 
-  filter.isActive = true
+  if (!req.user || req.user.role !== "admin") {
+    // নন-অ্যাডমিনদের জন্য ডিফল্ট ফিল্টার
+    filter.isActive = true
+  } else {
+    // অ্যাডমিনদের জন্য: isActive কোয়েরি প্যারামিটার চেক করো
+    if (req.query.isActive !== undefined) {
+      filter.isActive = req.query.isActive === "true"
+    }
+    // যদি অ্যাডমিন কোনো কোয়েরি না পাঠায়, filter এ isActive থাকবে না, ফলে সব প্রোডাক্ট দেখাবে
+  }
 
-  // Handle parent category filtering (by slug or ObjectId)
   if (req.query.parentCategoryId) {
     filter.parentCategoryId = req.query.parentCategoryId
   } else if (req.query.parentCategory) {

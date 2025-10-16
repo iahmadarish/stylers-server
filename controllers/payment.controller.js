@@ -414,8 +414,8 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       phone: shippingAddress.phone || "",
       email: shippingAddress.email || "",
       address: shippingAddress.address || "",
-      city: shippingAddress.city || "Dhaka",
-      state: shippingAddress.state || "Dhaka",
+      city: shippingAddress.city || "", // changed to employ 
+      state: shippingAddress.state || "", // changed to employ 
       zipCode: shippingAddress.zipCode || "",
       country: shippingAddress.country || "Bangladesh",
     }

@@ -233,6 +233,7 @@ router.get("/:id/images/:color", getProductImagesByColor)
 router.get("/:productId/reviews", getProductReviews)
 router.get('/by-sub/:subId', async (req, res) => { /* ... logic ... */ });
 router.get('/by-parent/:parentId', async (req, res) => { /* ... logic ... */ });
+router.get("/", getProducts) 
 
 // Public Product Details Specific Slugs
 router.get("/:slug/basic", getProductBasicInfo);
@@ -245,7 +246,6 @@ router.get("/:slug/reviews", getProductReviews)
 router.get("/admin-list", protect, restrictTo("admin", "executive"), getAllProductsForAdmin)
 
 
-router.get("/", protect, getProducts) 
 router.post("/", protect, restrictTo("admin", "executive"), productUpload.array("images", 50), createProduct)
 
 router.route("/:id")

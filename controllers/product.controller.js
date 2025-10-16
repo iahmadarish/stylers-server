@@ -439,6 +439,148 @@ export const getProducts = catchAsync(async (req, res, next) => {
     },
   })
 })
+export const getAllProductsForAdmin = catchAsync(async (req, res, next) => {
+  // Build filter object
+  const filter = {}
+
+  if (!req.user || req.user.role !== "admin") {
+    // নন-অ্যাডমিনদের জন্য ডিফল্ট ফিল্টার
+    filter.isActive = true
+  } else {
+    // অ্যাডমিনদের জন্য: isActive কোয়েরি প্যারামিটার চেক করো
+    if (req.query.isActive !== undefined) {
+      filter.isActive = req.query.isActive === "true"
+    }
+    // যদি অ্যাডমিন কোনো কোয়েরি না পাঠায়, filter এ isActive থাকবে না, ফলে সব প্রোডাক্ট দেখাবে
+  }
+
+  if (req.query.parentCategoryId) {
+    filter.parentCategoryId = req.query.parentCategoryId
+  } else if (req.query.parentCategory) {
+    const parentCategory = await ParentCategory.findOne({ slug: req.query.parentCategory })
+    if (parentCategory) {
+      filter.parentCategoryId = parentCategory._id
+      console.log(`Found parent category: ${parentCategory.name} (${parentCategory._id})`)
+    } else {
+      console.log(`Parent category not found for slug: ${req.query.parentCategory}`)
+    }
+  }
+
+  // Handle sub category filtering (by slug or ObjectId)
+  if (req.query.subCategoryId) {
+    filter.subCategoryId = req.query.subCategoryId
+  } else if (req.query.subCategory) {
+    const subCategory = await SubCategory.findOne({ slug: req.query.subCategory })
+    if (subCategory) {
+      filter.subCategoryId = subCategory._id
+      console.log(`Found sub category: ${subCategory.name} (${subCategory._id})`)
+    } else {
+      console.log(`Sub category not found for slug: ${req.query.subCategory}`)
+    }
+  }
+
+  // Handle dress type filtering (by slug or ObjectId)
+  if (req.query.dressTypeId) {
+    filter.dressTypeId = req.query.dressTypeId
+  } else if (req.query.dressType) {
+    const dressType = await DressType.findOne({ slug: req.query.dressType })
+    if (dressType) {
+      filter.dressTypeId = dressType._id
+      console.log(`Found dress type: ${dressType.name} (${dressType._id})`)
+    } else {
+      console.log(`Dress type not found for slug: ${req.query.dressType}`)
+    }
+  }
+
+  // Handle style filtering (by slug or ObjectId)
+  if (req.query.styleId) {
+    filter.styleId = req.query.styleId
+  } else if (req.query.style) {
+    const style = await Style.findOne({ slug: req.query.style })
+    if (style) {
+      filter.styleId = style._id
+      console.log(`Found style: ${style.name} (${style._id})`)
+    } else {
+      console.log(`Style not found for slug: ${req.query.style}`)
+    }
+  }
+
+  // Color filtering
+  if (req.query.color) {
+    filter["images.colorName"] = { $regex: req.query.color, $options: "i" }
+  }
+
+  // okay: NEW: Product code filtering
+  if (req.query.productCode) {
+    filter["variants.productCode"] = req.query.productCode
+  }
+
+  // Other filters
+  if (req.query.gender) filter.gender = req.query.gender
+  if (req.query.brand) filter.brand = req.query.brand
+  if (req.query.isFeatured) filter.isFeatured = req.query.isFeatured === "true"
+
+  // Price range filter (using calculated price)
+  if (req.query.minPrice || req.query.maxPrice) {
+    filter.price = {}
+    if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice)
+    if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice)
+  }
+
+  // Search by title, description, or product code
+  if (req.query.search) {
+    filter.$or = [
+      { title: { $regex: req.query.search, $options: "i" } },
+      { description: { $regex: req.query.search, $options: "i" } },
+      { "variants.productCode": { $regex: req.query.search, $options: "i" } },
+    ]
+  }
+
+  // Debug logging
+  console.log("Received query params:", req.query)
+  console.log("Applied filter:", JSON.stringify(filter, null, 2))
+
+  // Pagination
+  const page = Number.parseInt(req.query.page, 10) || 1
+  const limit = Number.parseInt(req.query.limit, 10) || 10
+  const skip = (page - 1) * limit
+
+  // Sorting
+  const sortBy = req.query.sortBy || "createdAt"
+  const sortOrder = req.query.sortOrder === "asc" ? 1 : -1
+  const sort = { [sortBy]: sortOrder }
+
+  // Execute query with variants
+  const products = await Product.find(filter)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .populate([
+      { path: "parentCategoryId", select: "name slug" },
+      { path: "subCategoryId", select: "name slug" },
+      { path: "dressTypeId", select: "name slug" },
+      { path: "styleId", select: "name slug" },
+    ])
+
+  // Get total count for pagination
+  const total = await Product.countDocuments(filter)
+
+  console.log(`Found ${products.length} products out of ${total} total`)
+
+  res.status(200).json({
+    status: "success",
+    results: products.length,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    },
+    data: {
+      products,
+    },
+  })
+})
 
 // @desc    Get product by ID
 // @route   GET /api/products/:id
@@ -1018,6 +1160,7 @@ export const getProductsByStyle = async (req, res) => {
 }
 
 export const getProductByIdOrSlug = catchAsync(async (req, res, next) => {
+  console.log("[DEBUG] 🚨 HIT: Comprehensive Detail Route /:idOrSlug");
   const value = req.params.idOrSlug
 
   const populateFields = [
@@ -1050,6 +1193,7 @@ export const getProductByIdOrSlug = catchAsync(async (req, res, next) => {
 // okay: OPTIMIZED LAZY LOADING ENDPOINTS
 export const getProductBasicInfo = async (req, res) => {
   try {
+    console.log("[DEBUG] ⚠️ HIT: Basic Info Route /:slug/basic");
     const { slug } = req.params
 
     const product = await Product.findOne({ slug })

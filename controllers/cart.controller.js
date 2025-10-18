@@ -255,7 +255,7 @@ export const getCart = async (req, res) => {
 
     let cart = await Cart.findOne({ userId }).populate({
       path: 'items.productId',
-      select: 'title slug images brand basePrice price discountPercentage isActive'
+      select: 'title slug images brand basePrice price discountPercentage isActive stock'
     })
 
     if (!cart) {
@@ -280,7 +280,7 @@ export const getCart = async (req, res) => {
     // Re-populate after price refresh
     await cart.populate({
       path: 'items.productId',
-      select: 'title slug images brand basePrice price discountPercentage isActive'
+      select: 'title slug images brand basePrice price discountPercentage isActive stock'
     })
 
     res.status(200).json({ 

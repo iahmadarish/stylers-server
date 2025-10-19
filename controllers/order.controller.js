@@ -774,22 +774,130 @@ export const getOrder = async (req, res) => {
 // }
 
 
+const restoreProductStock = async (orderItems) => {
+  for (const item of orderItems) {
+    const product = await Product.findById(item.productId);
+    if (!product) continue;
+
+    const quantity = item.quantity;
+
+    if (item.variantId) {
+      const variant = product.variants.id(item.variantId);
+      if (variant) {
+        variant.stock = variant.stock + quantity; // Restore stock
+      }
+    }
+
+    if (item.colorVariantId) {
+      const colorVariant = product.colorVariants.id(item.colorVariantId);
+      if (colorVariant) {
+        colorVariant.stock = colorVariant.stock + quantity; // Restore stock
+      }
+    }
+
+    product.stock = product.stock + quantity; // Restore main product stock
+    await product.save();
+  }
+  console.log('✅ Product stock restored for order items.');
+};
+
+// export const updateOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
+//     const { status, paymentStatus } = req.body
+
+//     const updateData = {}
+//     if (status) updateData.status = status
+//     if (paymentStatus) updateData.paymentStatus = paymentStatus
+
+//     const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
+
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
+
+    
+//     if (status === "shipped" && !order.pathaoOrderId) {
+//       try {
+//         console.log('Creating Pathao order for:', order.orderNumber);
+        
+//         const pathaoRes = await createPathaoOrder(order)
+
+//         order.pathaoTrackingId = pathaoRes.data.consignment_id
+//         order.pathaoOrderId = pathaoRes.data.order_id
+//         order.pathaoStatus = pathaoRes.data.status
+
+//         await order.save()
+//         console.log("Pathao order created successfully:", pathaoRes.data)
+        
+//       } catch (err) {
+//         console.error("❌ Pathao order creation failed:", err.message)
+        
+//         // ✅ FIXED: PATHAO_BASE_URL is now defined
+//         if (PATHAO_BASE_URL.includes('sandbox')) {
+//           console.log('Sandbox environment - creating mock Pathao data');
+          
+//           // Mock data for sandbox testing
+//           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
+//           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
+//           order.pathaoStatus = 'pending';
+//           order.pathaoSandboxMode = true;
+          
+//           await order.save();
+//           console.log('✅ Mock Pathao data created for sandbox testing');
+//         } else {
+//           // Production error handling
+//           order.pathaoError = err.message;
+//           await order.save();
+//         }
+//       }
+//     }
+
+//     res.status(200).json({
+//       status: "success",
+//       message: "Order updated successfully",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Update order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
+
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params
     const { status, paymentStatus } = req.body
 
+    const orderToUpdate = await Order.findById(id);
+
+    if (!orderToUpdate) {
+      return res.status(404).json({ message: "Order not found" })
+    }
+
+    const previousStatus = orderToUpdate.status;
+
     const updateData = {}
     if (status) updateData.status = status
     if (paymentStatus) updateData.paymentStatus = paymentStatus
 
-    const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
+    // ✅ Stock Restoration Logic:
+    // Restore stock if the new status is 'cancelled' or 'refunded',
+    // AND the previous status was NOT already 'cancelled' or 'refunded' 
+    const shouldRestoreStock = 
+      (status === "cancelled" || status === "refunded") &&
+      previousStatus !== "cancelled" &&
+      previousStatus !== "refunded";
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" })
+    if (shouldRestoreStock) {
+      console.log(`⚠️ Restoring stock for order ${orderToUpdate.orderNumber} due to status change from ${previousStatus} to ${status}`);
+      await restoreProductStock(orderToUpdate.items);
     }
 
-    
+
+    const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
+
+    // Pathao integration logic (Unchanged, for 'shipped' status)
     if (status === "shipped" && !order.pathaoOrderId) {
       try {
         console.log('Creating Pathao order for:', order.orderNumber);
@@ -806,11 +914,10 @@ export const updateOrder = async (req, res) => {
       } catch (err) {
         console.error("❌ Pathao order creation failed:", err.message)
         
-        // ✅ FIXED: PATHAO_BASE_URL is now defined
+        // Sandbox-specific error handling
         if (PATHAO_BASE_URL.includes('sandbox')) {
           console.log('Sandbox environment - creating mock Pathao data');
           
-          // Mock data for sandbox testing
           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
           order.pathaoStatus = 'pending';
@@ -838,10 +945,46 @@ export const updateOrder = async (req, res) => {
 }
 
 
+// export const cancelOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params
+//     const userId = req.user.id
+
+//     const order = await Order.findById(id)
+
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" })
+//     }
+
+//     // Check if user owns this order (skip for guest orders as they can't cancel through this endpoint)
+//     if (!order.isGuestOrder && order.userId.toString() !== userId) {
+//       return res.status(403).json({ message: "Access denied" })
+//     }
+
+//     // Check if order can be cancelled
+//     if (order.status === "delivered" || order.status === "cancelled") {
+//       return res.status(400).json({ message: "Order cannot be cancelled" })
+//     }
+
+//     order.status = "cancelled"
+//     await order.save()
+
+//     res.status(200).json({
+//       status: "success",
+//       message: "Order cancelled successfully",
+//       data: { order },
+//     })
+//   } catch (error) {
+//     console.error("Cancel order error:", error)
+//     res.status(500).json({ message: "Internal server error", error: error.message })
+//   }
+// }
+// Dashboard statistics
 
 export const cancelOrder = async (req, res) => {
   try {
     const { id } = req.params
+    // req.user.id is available via auth middleware for logged-in users
     const userId = req.user.id
 
     const order = await Order.findById(id)
@@ -850,22 +993,26 @@ export const cancelOrder = async (req, res) => {
       return res.status(404).json({ message: "Order not found" })
     }
 
-    // Check if user owns this order (skip for guest orders as they can't cancel through this endpoint)
+    // Check if user owns this order
+    // Note: Guest orders typically cannot be cancelled via this logged-in user endpoint
     if (!order.isGuestOrder && order.userId.toString() !== userId) {
       return res.status(403).json({ message: "Access denied" })
     }
 
-    // Check if order can be cancelled
-    if (order.status === "delivered" || order.status === "cancelled") {
-      return res.status(400).json({ message: "Order cannot be cancelled" })
+    // Check if order can be cancelled (e.g., prevent cancellation if already delivered/cancelled)
+    if (order.status === "delivered" || order.status === "cancelled" || order.status === "shipped") {
+      return res.status(400).json({ message: `Order cannot be cancelled in ${order.status} status` })
     }
+
+    // ✅ Stock Restoration: Restore stock before marking as cancelled
+    await restoreProductStock(order.items); 
 
     order.status = "cancelled"
     await order.save()
 
     res.status(200).json({
       status: "success",
-      message: "Order cancelled successfully",
+      message: "Order cancelled successfully and stock restored",
       data: { order },
     })
   } catch (error) {
@@ -873,7 +1020,8 @@ export const cancelOrder = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message })
   }
 }
-// Dashboard statistics
+
+
 export const getDashboardStats = async (req, res) => {
   try {
     const { range = '30days' } = req.query;

@@ -11,7 +11,7 @@ import { deleteImage, getPublicIdFromUrl } from "../utils/cloudinary.js"
 // @route   POST /api/categories/parent
 // @access  Private/Admin
 export const createParentCategory = catchAsync(async (req, res, next) => {
-  const { name, description, isActive } = req.body
+  const { name, description, isActive, metaTitle, metaDescription, aPlusContent } = req.body
 
   // Handle image upload
   const image = req.file ? req.file.path : undefined
@@ -22,6 +22,9 @@ export const createParentCategory = catchAsync(async (req, res, next) => {
     name,
     description,
     isActive: isActive === "true" || isActive === true,
+    metaTitle,
+    metaDescription,
+    aPlusContent,
     image,
   })
 
@@ -106,7 +109,7 @@ export const getParentCategoryForAdmin = catchAsync(async (req, res, next) => {
 // @route   PATCH /api/categories/parent/:id
 // @access  Private/Admin
 export const updateParentCategory = catchAsync(async (req, res, next) => {
-  const { name, description, isActive } = req.body
+  const { name, description, isActive, metaTitle, metaDescription, aPlusContent } = req.body
 
   const existingCategory = await ParentCategory.findById(req.params.id)
   if (!existingCategory) {
@@ -117,6 +120,9 @@ export const updateParentCategory = catchAsync(async (req, res, next) => {
     name,
     description,
     isActive: isActive === "true" || isActive === true,
+    metaTitle, 
+    metaDescription,
+    aPlusContent
   }
 
   if (req.file) {
@@ -208,7 +214,7 @@ export const deleteParentCategory = catchAsync(async (req, res, next) => {
 // @route   POST /api/categories/sub
 // @access  Private/Admin
 export const createSubCategory = catchAsync(async (req, res, next) => {
-  const { name, parentCategoryId, description, isActive } = req.body
+  const { name, parentCategoryId, description, isActive, metaTitle, metaDescription, aPlusContent } = req.body
 
   const parentCategory = await ParentCategory.findById(parentCategoryId)
   if (!parentCategory) {
@@ -223,6 +229,9 @@ export const createSubCategory = catchAsync(async (req, res, next) => {
     description,
     isActive: isActive === "true" || isActive === true,
     image,
+     metaTitle, 
+     metaDescription ,
+     aPlusContent
   })
 
   res.status(201).json({
@@ -326,7 +335,7 @@ export const getSubCategoryForAdmin = catchAsync(async (req, res, next) => {
 // @route   PATCH /api/categories/sub/:id
 // @access  Private/Admin
 export const updateSubCategory = catchAsync(async (req, res, next) => {
-  const { name, parentCategoryId, description, isActive } = req.body
+  const { name, parentCategoryId, description, isActive, metaTitle, metaDescription, aPlusContent } = req.body
 
   if (parentCategoryId) {
     const parentCategory = await ParentCategory.findById(parentCategoryId)
@@ -354,6 +363,9 @@ const updateFields = {
     parentCategoryId,
     description,
     isActive: isActive === "true" || isActive === true,
+    metaTitle, 
+    metaDescription,
+    aPlusContent
 }
 
 
@@ -440,7 +452,7 @@ export const deleteSubCategory = catchAsync(async (req, res, next) => {
 // @route   POST /api/categories/dress-type
 // @access  Private/Admin
 export const createDressType = catchAsync(async (req, res, next) => {
-  const { name, subCategoryId, description, isActive } = req.body
+  const { name, subCategoryId, description, isActive,  metaTitle, metaDescription, aPlusContent  } = req.body
 
   const subCategory = await SubCategory.findById(subCategoryId)
   if (!subCategory) {
@@ -455,6 +467,9 @@ export const createDressType = catchAsync(async (req, res, next) => {
     description,
     isActive: isActive === "true" || isActive === true,
     image,
+     metaTitle, 
+     metaDescription,
+     aPlusContent 
   })
 
   res.status(201).json({
@@ -578,7 +593,7 @@ export const getDressTypeForAdmin = catchAsync(async (req, res, next) => {
 // @route   PATCH /api/categories/dress-type/:id
 // @access  Private/Admin
 export const updateDressType = catchAsync(async (req, res, next) => {
-  const { name, subCategoryId, description, isActive } = req.body
+  const { name, subCategoryId, description, isActive,  metaTitle, metaDescription, aPlusContent  } = req.body
 
   if (subCategoryId) {
     const subCategory = await SubCategory.findById(subCategoryId)
@@ -609,6 +624,9 @@ export const updateDressType = catchAsync(async (req, res, next) => {
     subCategoryId, 
     description,
     isActive: isActive === "true" || isActive === true,
+     metaTitle, 
+     metaDescription,
+     aPlusContent 
 }
 
   if (req.file) {
@@ -682,7 +700,7 @@ export const deleteDressType = catchAsync(async (req, res, next) => {
 // @route   POST /api/categories/style
 // @access  Private/Admin
 export const createStyle = catchAsync(async (req, res, next) => {
-  const { name, dressTypeId, description, isActive } = req.body
+  const { name, dressTypeId, description, isActive,  metaTitle, metaDescription, aPlusContent  } = req.body
 
   const dressType = await DressType.findById(dressTypeId)
   if (!dressType) {
@@ -697,6 +715,9 @@ export const createStyle = catchAsync(async (req, res, next) => {
     description,
     isActive: isActive === "true" || isActive === true,
     image,
+    metaTitle, 
+    metaDescription,
+    aPlusContent 
   })
 
   res.status(201).json({
@@ -836,7 +857,7 @@ export const getStyleForAdmin = catchAsync(async (req, res, next) => {
 // @route   PATCH /api/categories/style/:id
 // @access  Private/Admin
 export const updateStyle = catchAsync(async (req, res, next) => {
-  const { name, dressTypeId, description, isActive } = req.body
+  const { name, dressTypeId, description, isActive,  metaTitle, metaDescription, aPlusContent  } = req.body
 
   if (dressTypeId) {
     const dressType = await DressType.findById(dressTypeId)
@@ -866,6 +887,9 @@ export const updateStyle = catchAsync(async (req, res, next) => {
     dressTypeId, // Style-এর ক্ষেত্রে এটি dressTypeId হবে
     description,
     isActive: isActive === "true" || isActive === true,
+    metaTitle, 
+    metaDescription, 
+    aPlusContent 
 }
 
 if (req.file) {

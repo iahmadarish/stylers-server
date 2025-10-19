@@ -23,6 +23,16 @@ const styleSchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    metaTitle: {
+      type: String,
+    },
+    metaDescription: {
+      type: String,
+    },
+    aPlusContent: {
+      type: String, // HTML content will be stored as a string
+      default: "",
+    },
     isActive: {
       type: Boolean,
       default: true,

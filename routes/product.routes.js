@@ -231,7 +231,21 @@ router.get("/style/:styleId", getProductsByStyle)
 router.get("/hierarchy/:parentCategoryId/:subCategoryId?/:dressTypeId?/:styleId?", getProductsByHierarchy)
 router.get("/:id/images/:color", getProductImagesByColor)
 router.get("/:productId/reviews", getProductReviews)
-router.get('/by-sub/:subId', async (req, res) => { /* ... logic ... */ });
+router.get('/by-sub/:subId', async (req, res) => {
+   try {
+     const products = await Product.find({ 
+       subCategoryId: req.params.subId,
+       isActive: true 
+     }).populate('parentCategoryId subCategoryId');
+ 
+     res.json({ 
+       success: true,
+       products 
+     });
+   } catch (error) {
+     res.status(500).json({ success: false, message: error.message });
+   }
+});
 router.get('/by-parent/:parentId', async (req, res) => { /* ... logic ... */ });
 router.get("/", getProducts) 
 

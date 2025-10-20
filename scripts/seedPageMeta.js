@@ -4,94 +4,94 @@ import PageMeta from '../models/PageMeta.js';
 const defaultPages = [
   {
     pageName: 'Home',
-    pageSlug: 'home',
-    metaTitle: 'StyleHub - Fashion for Everyone | Online Clothing Store',
-    metaDescription: 'Discover the latest fashion trends for men, women and kids. Shop from our exclusive collection of clothing, accessories and more with free shipping.',
+    pageSlug: 'paarel',
+    metaTitle: 'PAARÉL|Best Online Clothing Store in Bangladesh',
+    metaDescription: 'Shop the best online clothing store in Bangladesh – PAARÉL. Explore the premium men’s and women’s fashion with modern design, quality fabrics, and fast delivery.',
     metaKeywords: 'fashion, clothing, men fashion, women fashion, kids fashion, online shopping, stylehub, clothes, apparel',
-    canonicalUrl: 'https://yourstore.com',
+    canonicalUrl: 'https://paarel.com/',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'About Us',
-    pageSlug: 'about-us',
-    metaTitle: 'About StyleHub - Our Story & Mission | Fashion Store',
-    metaDescription: 'Learn about StyleHub journey, our mission to provide quality fashion, and our commitment to customer satisfaction. Discover what makes us different.',
+    pageSlug: 'about-stylers-outfit',
+    metaTitle: 'PAARÉL | About Us – Modern Fashion & Stylish Clothing in Bangladesh',
+    metaDescription: 'Learn about PAARÉL, a Bangladeshi fashion brand offering stylish, high-quality clothing for men, women, and kids with everyday comfort in mind.',
     metaKeywords: 'about us, our story, company mission, fashion brand, clothing store, stylehub about',
-    canonicalUrl: 'https://yourstore.com/about-us',
+    canonicalUrl: 'https://paarel.com/about-stylers-outfit',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Blog',
     pageSlug: 'blog',
-    metaTitle: 'Fashion Blog - Latest Trends & Style Tips | StyleHub',
-    metaDescription: 'Read our fashion blog for the latest style trends, outfit ideas, fashion tips, and industry insights. Stay updated with the fashion world.',
+    metaTitle: 'PAARÉL Fashion Blog – Style Tips & Trends',
+    metaDescription: 'Read PAARÉL’s blog for the latest fashion tips, styling ideas, and trends in Bangladesh, helping you stay stylish every day.',
     metaKeywords: 'fashion blog, style tips, fashion trends, outfit ideas, fashion news, style guide',
-    canonicalUrl: 'https://yourstore.com/blog',
+    canonicalUrl: 'https://paarel.com/blog',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Contact',
     pageSlug: 'contact',
-    metaTitle: 'Contact Us - Get in Touch | StyleHub Customer Support',
-    metaDescription: 'Contact StyleHub customer support for any queries, feedback, or assistance. We are here to help you with your fashion needs.',
+    metaTitle: 'Get in Touch with PAARÉL – We are Here to Help',
+    metaDescription: 'Have questions or need assistance? Reach out to PAARÉLs customer support for prompt and friendly service. We are here to help you.',
     metaKeywords: 'contact us, customer support, help, feedback, query, fashion store contact',
-    canonicalUrl: 'https://yourstore.com/contact',
+    canonicalUrl: 'https://paarel.com/contact',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Products',
     pageSlug: 'products',
-    metaTitle: 'Products - Shop All Collections | StyleHub Fashion Store',
-    metaDescription: 'Browse our complete product collection. Find men, women, and kids clothing, accessories, and more. Latest fashion at great prices.',
+    metaTitle: 'Shop PAARÉL – Trendy Apparel for Every Season',
+    metaDescription: 'Discover PAARÉLs curated collection of mens, womens, and kids clothing Stylish, comfortable, and perfect for any occasion. Shop now!',
     metaKeywords: 'products, shop, collections, clothing, accessories, fashion items, online store',
-    canonicalUrl: 'https://yourstore.com/products',
+    canonicalUrl: 'https://paarel.com/products/',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Privacy Policy',
     pageSlug: 'privacy-policy',
-    metaTitle: 'Privacy Policy - Data Protection | StyleHub',
-    metaDescription: 'Read our privacy policy to understand how we collect, use, and protect your personal information. Your privacy is important to us.',
+    metaTitle: 'PAARÉL Privacy Policy – Your Data, Our Care',
+    metaDescription: 'Read PAARÉL’s privacy policy to understand how we protect your personal information and ensure a safe and secure shopping experience.',
     metaKeywords: 'privacy policy, data protection, personal information, privacy, terms',
-    canonicalUrl: 'https://yourstore.com/privacy-policy',
+    canonicalUrl: 'https://paarel.com/privacy-policy',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Terms of Service',
     pageSlug: 'terms-of-service',
-    metaTitle: 'Terms of Service - User Agreement | StyleHub',
-    metaDescription: 'Review our terms of service to understand the rules and guidelines for using our website and services.',
+    metaTitle: 'PAARÉL Terms of Service – Shop with Confidence',
+    metaDescription: 'Review PAARÉL’s terms of service to understand your rights, our policies, and how we ensure a smooth and trustworthy shopping experience.',
     metaKeywords: 'terms of service, user agreement, terms and conditions, website terms',
-    canonicalUrl: 'https://yourstore.com/terms-of-service',
+    canonicalUrl: 'https://paarel.com/terms-and-condition',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Shipping Policy',
     pageSlug: 'shipping-policy',
-    metaTitle: 'Shipping Policy - Delivery Information | StyleHub',
-    metaDescription: 'Learn about our shipping policies, delivery times, shipping costs, and international shipping options.',
+    metaTitle: 'PAARÉL Shipping – Fast & Free Delivery Across Bangladesh',
+    metaDescription: 'Enjoy free shipping on orders over TK 4,000. Fast delivery across Bangladesh with secure packaging and easy tracking. Shop with confidence at PAARÉL.',
     metaKeywords: 'shipping policy, delivery, shipping info, free shipping, international shipping',
-    canonicalUrl: 'https://yourstore.com/shipping-policy',
+    canonicalUrl: 'https://paarel.com/shipping',
     isActive: true,
     lastUpdatedBy: 'system'
   },
   {
     pageName: 'Return Policy',
     pageSlug: 'return-policy',
-    metaTitle: 'Return & Refund Policy | StyleHub Fashion Store',
-    metaDescription: 'Understand our return and refund policy. Learn how to return items, eligibility criteria, and refund process.',
+    metaTitle: 'PAARÉL Return Policy – Easy & Hassle-Free Returns',
+    metaDescription: 'Learn about PAARÉL’s return policy. Enjoy simple, hassle-free returns on your orders, ensuring a smooth and worry-free shopping experience.',
     metaKeywords: 'return policy, refund policy, returns, exchanges, money back',
-    canonicalUrl: 'https://yourstore.com/return-policy',
+    canonicalUrl: 'https://paarel.com/return-policy',
     isActive: true,
-    lastUpdatedBy: 'system'
-  }
+    lastUpdatedBy: 'system'
+  }
 ];
 
 const seedDatabase = async () => {

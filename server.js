@@ -8,6 +8,8 @@ import passport from "passport"
 import session from "express-session"
 import cron from 'node-cron';
 import Product from './models/Product.js';
+import ParentCategory from './models/ParentCategory.js';
+import SubCategory from './models/SubCategory.js';
 import { startCronJobs } from './utils/cronJobs.js';
 
 // Load environment variables first
@@ -236,6 +238,73 @@ app.get("/api/sitemap-products.xml", async (req, res) => {
     res.status(500).send("Error generating sitemap");
   }
 });
+
+app.get("/api/sitemap-categories.xml", async (req, res) => {
+  try {
+    const baseUrl = "https://paarel.com";
+    const categories = await ParentCategory.find({ isActive: true }, "slug updatedAt");
+
+    let urls = "";
+    categories.forEach((c) => {
+      urls += `
+        <url>
+          <loc>${baseUrl}/category/${c.slug}</loc>
+          <lastmod>${c.updatedAt.toISOString()}</lastmod>
+          <priority>0.7</priority>
+        </url>
+      `;
+    });
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      ${urls}
+      </urlset>
+    `;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (error) {
+    console.error("Sitemap Error (Parent Categories):", error);
+    res.status(500).send("Error generating category sitemap");
+  }
+});
+
+
+
+// SUBCATEGORY SITEMAP
+app.get("/api/sitemap-subcategories.xml", async (req, res) => {
+  try {
+    const baseUrl = "https://paarel.com";
+    const subcategories = await SubCategory.find({ isActive: true })
+      .populate("parentCategory", "slug")
+      .select("slug updatedAt");
+
+    let urls = "";
+    subcategories.forEach((s) => {
+      const parentSlug = s.parentCategory?.slug || "category";
+      urls += `
+        <url>
+          <loc>${baseUrl}/category/${parentSlug}/${s.slug}</loc>
+          <lastmod>${s.updatedAt.toISOString()}</lastmod>
+          <priority>0.6</priority>
+        </url>
+      `;
+    });
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      ${urls}
+      </urlset>
+    `;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (error) {
+    console.error("Sitemap Error (Subcategories):", error);
+    res.status(500).send("Error generating subcategory sitemap");
+  }
+});
+
 
 
 

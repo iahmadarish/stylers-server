@@ -13,6 +13,8 @@ import SubCategory from './models/SubCategory.js';
 import { startCronJobs } from './utils/cronJobs.js';
 import heroSectionRoutes from './routes/heroSection.js';
 import pageMetaRoutes from './routes/pageMeta.js';
+import trendingOffersRoutes from './routes/trendingOffers.js';
+
 // Load environment variables first
 dotenv.config()
 
@@ -179,6 +181,7 @@ app.use("/api/stock/reports", stockReportRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/hero-section', heroSectionRoutes);
 app.use('/api/page-meta', pageMetaRoutes);
+app.use('/api/trending-offers', trendingOffersRoutes);
 // Health check route
 app.get("/", (req, res) => {
   res.json({

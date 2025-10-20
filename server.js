@@ -242,13 +242,13 @@ app.get("/api/sitemap-products.xml", async (req, res) => {
 app.get("/api/sitemap-categories.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
-    const categories = await ParentCategory.find({ isActive: true }, "slug updatedAt");
+    const categories = await ParentCategory.find({}, "slug updatedAt");
 
     let urls = "";
     categories.forEach((c) => {
       urls += `
         <url>
-          <loc>${baseUrl}/category/${c.slug}</loc>
+          <loc>${baseUrl}/products/${c.slug}</loc>
           <lastmod>${c.updatedAt.toISOString()}</lastmod>
           <priority>0.7</priority>
         </url>
@@ -270,25 +270,29 @@ app.get("/api/sitemap-categories.xml", async (req, res) => {
 });
 
 
-
-// SUBCATEGORY SITEMAP
+// ===============================
+// 📂 SubCategory Sitemap (Frontend path: /products/:parentSlug/:subSlug)
+// ===============================
 app.get("/api/sitemap-subcategories.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
-    const subcategories = await SubCategory.find({ isActive: true })
-      .populate("parentCategory", "slug")
-      .select("slug updatedAt");
+
+    // parentCategoryId ফিল্ডটা ব্যবহার করে populate করা হচ্ছে
+    const subcategories = await SubCategory.find({}, "slug updatedAt parentCategoryId")
+      .populate("parentCategoryId", "slug");
 
     let urls = "";
+
     subcategories.forEach((s) => {
-      const parentSlug = s.parentCategory?.slug || "category";
-      urls += `
-        <url>
-          <loc>${baseUrl}/category/${parentSlug}/${s.slug}</loc>
-          <lastmod>${s.updatedAt.toISOString()}</lastmod>
-          <priority>0.6</priority>
-        </url>
-      `;
+      if (s.parentCategoryId && s.parentCategoryId.slug && s.slug) {
+        urls += `
+          <url>
+            <loc>${baseUrl}/products/${s.parentCategoryId.slug}/${s.slug}</loc>
+            <lastmod>${s.updatedAt.toISOString()}</lastmod>
+            <priority>0.6</priority>
+          </url>
+        `;
+      }
     });
 
     const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
@@ -304,8 +308,6 @@ app.get("/api/sitemap-subcategories.xml", async (req, res) => {
     res.status(500).send("Error generating subcategory sitemap");
   }
 });
-
-
 
 
 // 404 handler

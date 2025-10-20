@@ -277,16 +277,17 @@ app.get("/api/sitemap-subcategories.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
 
-    // Populate করে parent slug নিচ্ছি
-    const subcategories = await SubCategory.find({}, "slug updatedAt parentCategory")
-      .populate("parentCategory", "slug");
+    // parentCategoryId ফিল্ডটা ব্যবহার করে populate করা হচ্ছে
+    const subcategories = await SubCategory.find({}, "slug updatedAt parentCategoryId")
+      .populate("parentCategoryId", "slug");
 
     let urls = "";
+
     subcategories.forEach((s) => {
-      if (s.parentCategory && s.parentCategory.slug && s.slug) {
+      if (s.parentCategoryId && s.parentCategoryId.slug && s.slug) {
         urls += `
           <url>
-            <loc>${baseUrl}/products/${s.parentCategory.slug}/${s.slug}</loc>
+            <loc>${baseUrl}/products/${s.parentCategoryId.slug}/${s.slug}</loc>
             <lastmod>${s.updatedAt.toISOString()}</lastmod>
             <priority>0.6</priority>
           </url>
@@ -307,7 +308,6 @@ app.get("/api/sitemap-subcategories.xml", async (req, res) => {
     res.status(500).send("Error generating subcategory sitemap");
   }
 });
-
 
 
 // 404 handler

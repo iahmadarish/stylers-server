@@ -4,19 +4,67 @@ import PageMeta from '../models/PageMeta.js';
 const router = express.Router();
 
 // GET all page meta data
-router.get('/', async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const pageMeta = await PageMeta.find({ isActive: true })
-      .sort({ pageName: 1 })
-      .select('-__v');
+    const {
+      pageName,
+      metaTitle,
+      metaDescription,
+      metaKeywords,
+      canonicalUrl,
+      lastUpdatedBy
+    } = req.body;
+
+    // Validation - pageSlug removed from required fields
+    if (!pageName || !metaTitle || !metaDescription || !metaKeywords || !canonicalUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required: pageName, metaTitle, metaDescription, metaKeywords, canonicalUrl'
+      });
+    }
+
+    // Check if page name already exists
+    const existingPage = await PageMeta.findOne({ 
+      pageName: pageName.trim()
+    });
+
+    if (existingPage) {
+      return res.status(400).json({
+        success: false,
+        message: 'Page name already exists'
+      });
+    }
+
+    const newPageMeta = new PageMeta({
+      pageName: pageName.trim(),
+      metaTitle: metaTitle.trim(),
+      metaDescription: metaDescription.trim(),
+      metaKeywords: metaKeywords.trim(),
+      canonicalUrl: canonicalUrl.trim(),
+      lastUpdatedBy: lastUpdatedBy || 'admin'
+    });
+
+    const savedPageMeta = await newPageMeta.save();
     
-    res.json({
+    res.status(201).json({
       success: true,
-      data: pageMeta,
-      count: pageMeta.length,
-      message: 'Page meta data fetched successfully'
+      data: savedPageMeta,
+      message: 'Page meta created successfully'
     });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        error: error.message
+      });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Page name or slug already exists'
+      });
+    }
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -182,12 +230,7 @@ router.put('/:id', async (req, res) => {
       const duplicatePage = await PageMeta.findOne({
         $and: [
           { _id: { $ne: req.params.id } },
-          { 
-            $or: [
-              { pageName: pageName.trim() },
-              { pageSlug: pageName.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '-') }
-            ]
-          }
+          { pageName: pageName.trim() }
         ]
       });
 

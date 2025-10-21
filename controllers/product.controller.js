@@ -410,6 +410,7 @@ export const getProducts = catchAsync(async (req, res, next) => {
 
   // Execute query with variants
   const products = await Product.find(filter)
+  .select('title slug basePrice price discountPercentage images.url images.colorCode parentCategoryId subCategoryId isFeatured')
     .sort(sort)
     .skip(skip)
     .limit(limit)
@@ -1121,16 +1122,37 @@ export const getProductsByParentCategory = async (req, res) => {
 }
 
 export const getProductsBySubCategory = async (req, res) => {
-  try {
-    const products = await Product.find({
-      subCategoryId: req.params.subCategoryId,
-      isActive: true,
-    }).populate("parentCategoryId subCategoryId dressTypeId styleId")
+    try {
+        const page = parseInt(req.query.page) || 1; // URL থেকে page নাও, না থাকলে default 1
+        const limit = parseInt(req.query.limit) || 12; // প্রতি পেজে ১২টি পণ্য দেখাও
+        const skip = (page - 1) * limit;
 
-    res.json(products)
-  } catch (error) {
-    res.status(500).json({ message: error.message })
-  }
+        const baseQuery = { subCategoryId: req.params.subId, isActive: true };
+
+        // ১. মোট পণ্য সংখ্যা গণনা করো (Pagination এর জন্য)
+        const totalProducts = await Product.countDocuments(baseQuery);
+        
+        // ২. Query-তে limit() এবং skip() ব্যবহার করো
+        const products = await Product.find(baseQuery)
+            .select('title slug basePrice currentPrice discountPercentage images.color') // ❗ ৩. শুধুমাত্র প্রয়োজনীয় ফিল্ডগুলো নির্বাচন করো
+            .populate({
+                path: 'parentCategoryId subCategoryId',
+                select: 'name slug' // ❗ Populated Field-এও শুধু প্রয়োজনীয় ফিল্ড নির্বাচন করো
+            })
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({
+            success: true,
+            products,
+            totalProducts,
+            totalPages: Math.ceil(totalProducts / limit),
+            currentPage: page,
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 }
 
 export const getProductsByDressType = async (req, res) => {

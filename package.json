@@ -10,10 +10,12 @@
     "seed:hero": "node scripts/seedHeroSlides.js",
     "seed:hero:dev": "node scripts/seedHeroSlides.js",
     "seed:pages": "node scripts/seedPageMeta.js",
-    "seed:all": "npm run seed:hero && npm run seed:pages",
+    "seed:offers": "node scripts/seedTrendingOffers.js",
+    "seed:all": "npm run seed:hero && npm run seed:pages && npm run seed:offers",
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  }
+  ,
   "keywords": [
     "ecommerce",
     "clothing",

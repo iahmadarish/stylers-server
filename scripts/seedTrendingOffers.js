@@ -12,7 +12,7 @@ const seedOffers = [
     isActive: true
   },
   {
-    brand: "PAARÉL", 
+    brand: "PAARÉL",
     title: "DROP SHOULDER TEE", 
     discount: "40% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/1_nfzza4.png",
@@ -20,7 +20,42 @@ const seedOffers = [
     order: 1,
     isActive: true
   },
-  // ... add all other offers
+  {
+    brand: "PAARÉL",
+    title: "DROP SHOULDER TEE",
+    discount: "40% off",
+    image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/2_a1wwjp.png", 
+    link: "/products/men/t-shirt",
+    order: 2,
+    isActive: true
+  },
+  {
+    brand: "PAARÉL",
+    title: "TWILL CHINO PANTS",
+    discount: "40% off",
+    image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/5_whrgex.png",
+    link: "/products/men/twill-chino-pants",
+    order: 3,
+    isActive: true
+  },
+  {
+    brand: "PAARÉL",
+    title: "WASHED DENIM",
+    discount: "40% off",
+    image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/4_ryx2hl.png",
+    link: "/products/men/denim-and-jeans",
+    order: 4,
+    isActive: true
+  },
+  {
+    brand: "PAARÉL",
+    title: "CARGO PANTS",
+    discount: "40% off", 
+    image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/3_o5mker.png",
+    link: "/products/men/cargo-pants",
+    order: 5,
+    isActive: true
+  }
 ];
 
 const seedDatabase = async () => {

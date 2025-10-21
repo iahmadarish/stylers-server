@@ -11,6 +11,9 @@ import Product from './models/Product.js';
 import ParentCategory from './models/ParentCategory.js';
 import SubCategory from './models/SubCategory.js';
 import { startCronJobs } from './utils/cronJobs.js';
+import heroSectionRoutes from './routes/heroSection.js';
+import pageMetaRoutes from './routes/pageMeta.js';
+import trendingOffersRoutes from './routes/trendingOffers.js';
 
 // Load environment variables first
 dotenv.config()
@@ -54,7 +57,7 @@ const corsOptions = {
       "https://www.paarel.com",
       "https://paarel.com",
 
-   "https://staging.paarel.com",
+      "https://staging.paarel.com",
       "http://staging.paarel.com",
       "staging.paarel.com",
 
@@ -66,12 +69,12 @@ const corsOptions = {
       "https://admin.paarel.com",
       "http://admin.paarel.com",
       "admin.paarel.com",
-  
+
     ];
-    
+
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -81,10 +84,10 @@ const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-    "Content-Type", 
-    "Authorization", 
-    "X-Requested-With", 
-    "Accept", 
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
     "Origin",
     "Content-Disposition" // Add this for file uploads
   ],
@@ -107,7 +110,7 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-  sameSite: "none",   // important for cross-site login
+      sameSite: "none",   // important for cross-site login
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   }),
@@ -115,10 +118,10 @@ app.use(
 
 
 app.use((req, res, next) => {
-    if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
-        return res.redirect(`https://${req.hostname}${req.url}`);
-    }
-    next();
+  if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+    return res.redirect(`https://${req.hostname}${req.url}`);
+  }
+  next();
 });
 
 // Passport middleware
@@ -176,7 +179,9 @@ app.use("/api/reviews", reviewRoutes)
 app.use("/api/stock/notifications", stockNotificationRoutes);
 app.use("/api/stock/reports", stockReportRoutes);
 app.use('/api/blogs', blogRoutes);
-
+app.use('/api/hero-section', heroSectionRoutes);
+app.use('/api/page-meta', pageMetaRoutes);
+app.use('/api/trending-offers', trendingOffersRoutes);
 // Health check route
 app.get("/", (req, res) => {
   res.json({
@@ -276,8 +281,6 @@ app.get("/api/sitemap-categories.xml", async (req, res) => {
 app.get("/api/sitemap-subcategories.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
-
-    // parentCategoryId ফিল্ডটা ব্যবহার করে populate করা হচ্ছে
     const subcategories = await SubCategory.find({}, "slug updatedAt parentCategoryId")
       .populate("parentCategoryId", "slug");
 
@@ -338,3 +341,6 @@ mongoose
   })
 
 export default app
+
+
+

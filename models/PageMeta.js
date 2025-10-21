@@ -9,7 +9,7 @@ const pageMetaSchema = new mongoose.Schema({
   },
   pageSlug: {
     type: String,
-    required: true,
+    // required: true,
     unique: true,
     trim: true,
     lowercase: true

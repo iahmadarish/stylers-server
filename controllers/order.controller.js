@@ -884,10 +884,11 @@ export const updateOrder = async (req, res) => {
     // ✅ Stock Restoration Logic:
     // Restore stock if the new status is 'cancelled' or 'refunded',
     // AND the previous status was NOT already 'cancelled' or 'refunded' 
-    const shouldRestoreStock = 
-      (status === "cancelled" || status === "refunded") &&
-      previousStatus !== "cancelled" &&
-      previousStatus !== "refunded";
+const shouldRestoreStock =
+  (status === "cancelled" || status === "refunded" || status === "returned") &&
+  previousStatus !== "cancelled" &&
+  previousStatus !== "refunded" &&
+  previousStatus !== "returned";
 
     if (shouldRestoreStock) {
       console.log(`⚠️ Restoring stock for order ${orderToUpdate.orderNumber} due to status change from ${previousStatus} to ${status}`);

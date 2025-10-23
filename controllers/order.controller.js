@@ -5,7 +5,7 @@ import { sendOrderEmails } from "../services/emailService.js"
 import User from "../models/User.js"
 import { createPathaoOrder } from "../services/pathaoService.js";
 import { PATHAO_BASE_URL } from "../services/pathaoService.js";
-
+import { getIo } from "../utils/socket.js"
 
 // Existing createOrder function (unchanged for logged-in users)
 export const createOrder = async (req, res) => {
@@ -97,6 +97,34 @@ export const createOrder = async (req, res) => {
 
     await order.save();
     console.log('✅ Order created successfully:', order.orderNumber);
+
+
+
+    // =======================================================
+    // 🔔 Socket.IO Notification Block - START 
+    // =======================================================
+    try {
+      const io = getIo();
+      const customerName = order.shippingAddress.fullName || 'a Customer';
+      const notificationMessage = `New Order #${order.orderNumber} placed by ${customerName}`
+      
+      const notificationData = {
+        message: notificationMessage,
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString(),
+        link: `/orders/${order._id}` 
+      }
+      
+      // Emit the notification to all connected clients (e.g., admin dashboard)
+      io.emit('newOrderNotification', notificationData); 
+      console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
+
+    } catch (socketError) {
+      // Socket error should not block the main process
+      console.error('[Socket.IO] Error emitting notification:', socketError.message);
+    }
+
 
     // Send confirmation email using the new helper function
     try {
@@ -377,6 +405,28 @@ export const createGuestOrder = async (req, res) => {
     console.log("Creating order with data:", JSON.stringify(order.toObject(), null, 2));
 
     await order.save();
+
+try {
+  const io = getIo(); // <-- নিশ্চিত করুন যে getIo() ইমপোর্ট করা হয়েছে
+  const customerName = order.shippingAddress.fullName || 'a Guest Customer';
+  const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
+  
+  const notificationData = {
+    message: notificationMessage,
+    orderId: order._id.toString(),
+    orderNumber: order.orderNumber,
+    timestamp: new Date().toISOString(),
+    link: `/orders/${order._id}` 
+  }
+  
+  io.emit('newOrderNotification', notificationData); 
+  console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`); // <-- এই লগটি আপনার সার্ভার লগে আসা উচিত
+
+} catch (socketError) {
+  console.error('[Socket.IO] Error emitting notification:', socketError.message);
+}
+
+
 
     // Send confirmation email using the new helper function
     try {

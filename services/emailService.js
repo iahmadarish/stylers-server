@@ -158,52 +158,121 @@ export const sendTestEmail = async (toEmail) => {
   }
 };
 
+
+const generateAdminEmailHtml = (order) => {
+
+    const customerName = order.isGuestOrder 
+        ? order.guestCustomerInfo?.name || order.shippingAddress?.fullName || 'N/A'
+        : order.shippingAddress?.fullName || order.guestCustomerInfo?.name || 'N/A';
+        
+    const email = order.isGuestOrder 
+        ? order.guestCustomerInfo?.email || order.shippingAddress?.email || 'N/A'
+        : order.shippingAddress?.email || order.guestCustomerInfo?.email || 'N/A';
+        
+    const phone = order.shippingAddress?.phone || 'N/A';
+    
+
+    const addressParts = [
+        order.shippingAddress?.address,
+        order.shippingAddress?.city,
+        order.shippingAddress?.state,
+        order.shippingAddress?.zipCode,
+        order.shippingAddress?.country
+    ].filter(p => p).join(', ');
+
+    const orderAmount = `${order.totalAmount?.toFixed(2) || 'N/A'} ${order.currency || 'BDT'}`;
+    const paymentMethodDisplay = order.paymentMethod 
+        ? order.paymentMethod.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') 
+        : 'N/A';
+    
+    const html = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; background-color: #f4f4f4;">
+            <h2 style="color: #4CAF50;">New Order Alert!</h2>
+            
+            <div style="border: 1px solid #ddd; padding: 15px; background-color: #ffffff;">
+                <h3 style="margin-top: 0; color: #555;">Order Information</h3>
+                <p><strong>Customer Name:</strong> ${customerName}</p>
+                <p><strong>Email:</strong> ${email}</p>
+                <p><strong>Phone:</strong> ${phone}</p>
+                <p><strong>Shipping Address:</strong> ${addressParts}</p>
+                <p><strong>Order Amount:</strong> ${orderAmount}</p>
+                <p><strong>Payment Method:</strong> ${paymentMethodDisplay}</p>
+            </div>
+            
+            <p style="margin-top: 25px; text-align: center;">
+                <a href="https://stylersoutfit-dashboard-amtv.vercel.app/orders/${order._id}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 5px;">View Order Details</a>
+            </p>
+            
+            <p style="margin-top: 30px; font-size: 0.8em; text-align: center; color: #777;">
+                This is an automated alert from Paarel.
+            </p>
+        </div>
+    `;
+    return html;
+};
+
+
 // Helper function to send email for both guest and logged-in orders
 export const sendOrderEmails = async (order, toEmail, isGuest = false) => {
+    
+    // 💡 স্টেপ ১: অ্যাডমিনের ইমেইল
+    const ADMIN_EMAIL = 'augmenticdigital@gmail.com'; 
+    
+    let originalCustomerName; 
     try {
-        let customerName = "Valued Customer"; // Default value
-
         if (isGuest) {
-            // Guest user - use guest information
-            customerName = order.guestCustomerInfo?.name || "Valued Customer";
+            originalCustomerName = order.guestCustomerInfo?.name || "Valued Customer";
         } else {
-            // Logged-in user - fetch from database using userId
-            if (order.userId) {
-                const user = await User.findById(order.userId);
-                if (user) {
-                    customerName = user.name;
-                } else {
-                    console.warn('⚠️ User not found for ID:', order.userId);
-                    // Fallback to shipping address name if user not found
-                    customerName = order.shippingAddress?.fullName || "Valued Customer";
-                }
-            } else {
-                // If no userId but not guest, try shipping address name
-                customerName = order.shippingAddress?.fullName || "Valued Customer";
-            }
+            const user = await User.findById(order.userId); 
+            originalCustomerName = user ? user.name : order.shippingAddress?.fullName || "Valued Customer";
         }
-        
-        console.log('👤 Determined customer name:', customerName);
-        console.log('📦 Order type:', isGuest ? 'Guest' : 'Logged-in');
-        
-        // Pass the customerName to the function that generates the email content
-        const htmlContent = generateOrderConfirmationEmail(order, isGuest, customerName);
-        const transporter = createTransporter();
-
-        const mailOptions = {
-            from: process.env.EMAIL_USERNAME,
-            to: toEmail,
-            subject: `Order Confirmation - ${order.orderNumber}`,
-            html: htmlContent,
-        };
-
-        const result = await transporter.sendMail(mailOptions);
-        console.log("✅ Mail sent successfully", result.messageId);
-        return { success: true };
-    } catch (error) {
-        console.error("❌ sendOrderEmails error:", error);
-        return { success: false, error: error.message };
+    } catch (e) {
+        console.warn("⚠️ Error determining customer name:", e.message);
+        originalCustomerName = order.shippingAddress?.fullName || "Valued Customer";
     }
+    
+    const recipients = [{ email: toEmail, isCustomer: true }];
+    if (ADMIN_EMAIL && ADMIN_EMAIL !== toEmail) {
+        recipients.push({ email: ADMIN_EMAIL, isCustomer: false });
+    }
+
+    const transporter = createTransporter();
+    let overallSuccess = true;
+
+    for (const recipient of recipients) {
+        const isOrderAdmin = !recipient.isCustomer;
+        let subject;
+        let htmlContent;
+        
+        try {
+            if (isOrderAdmin) {
+                const paymentMethod = order.paymentMethod ? order.paymentMethod.replace(/_/g, ' ') : 'N/A';
+                subject = `[NEW ORDER] #${order.orderNumber} - ${paymentMethod}`;
+                
+                htmlContent = generateAdminEmailHtml(order);
+
+            } else {
+                subject = `Order Confirmation - ${order.orderNumber}`;
+                htmlContent = generateOrderConfirmationEmail(order, isGuest, originalCustomerName);
+            }
+
+            const mailOptions = {
+                from: process.env.EMAIL_USERNAME,
+                to: recipient.email,
+                subject: subject,
+                html: htmlContent,
+            };
+
+            const result = await transporter.sendMail(mailOptions);
+            console.log(`✅ Mail sent successfully to ${isOrderAdmin ? 'Admin' : 'Customer'} (${recipient.email})`, result.messageId);
+
+        } catch (innerError) {
+            console.error(`❌ Mail sending failed for ${recipient.email}:`, innerError.message);
+            overallSuccess = false;
+        }
+    }
+    
+    return { success: overallSuccess };
 };
 
 export const generateOrderConfirmationEmail = (order, isGuest = false, customerName) => {

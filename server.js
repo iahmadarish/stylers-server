@@ -34,14 +34,16 @@ import stockReportRoutes from "./routes/stockReports.js"
 import blogRoutes from "./routes/blogRoutes.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
+import notificationRoutes from './routes/notification.routes.js';
 
 // Middleware imports
 import { errorHandler } from "./middleware/error.middleware.js"
-
+import http from 'http';
+import { initSocket } from "./utils/socket.js";
 // Initialize express app
 const app = express()
 const PORT = process.env.PORT || 5000
-
+const server = http.createServer(app);
 // CORS Configuration
 const corsOptions = {
   origin: function (origin, callback) {
@@ -143,7 +145,7 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-cron.schedule('* * * * *', async () => {
+cron.schedule('*/10 * * * *', async () => {
   try {
     console.log('[CRON] Running discount status check...');
     await Product.updateDiscountPrices();
@@ -151,6 +153,7 @@ cron.schedule('* * * * *', async () => {
     console.error('[CRON] Error in discount update:', error);
   }
 });
+
 startCronJobs();
 
 
@@ -182,6 +185,8 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/hero-section', heroSectionRoutes);
 app.use('/api/page-meta', pageMetaRoutes);
 app.use('/api/trending-offers', trendingOffersRoutes);
+app.use("/api/notifications", notificationRoutes);
+
 // Health check route
 app.get("/", (req, res) => {
   res.json({
@@ -331,7 +336,8 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("Connected to MongoDB")
-    app.listen(PORT, () => {
+    initSocket(server);
+    server.listen(PORT, () => { // <--- CHANGE 'app.listen' to 'server.listen'
       console.log(`Server running on port ${PORT}`)
       console.log(`Environment: ${process.env.NODE_ENV || "development"}`)
       console.log(` Health check: http://localhost:${PORT}`)

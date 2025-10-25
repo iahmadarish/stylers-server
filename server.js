@@ -34,14 +34,16 @@ import stockReportRoutes from "./routes/stockReports.js"
 import blogRoutes from "./routes/blogRoutes.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
+import notificationRoutes from './routes/notification.routes.js';
 
 // Middleware imports
 import { errorHandler } from "./middleware/error.middleware.js"
-
+import http from 'http';
+import { initSocket } from "./utils/socket.js";
 // Initialize express app
 const app = express()
 const PORT = process.env.PORT || 5000
-
+const server = http.createServer(app);
 // CORS Configuration
 const corsOptions = {
   origin: function (origin, callback) {
@@ -57,7 +59,7 @@ const corsOptions = {
       "https://www.paarel.com",
       "https://paarel.com",
 
-      "https://staging.paarel.com",
+   "https://staging.paarel.com",
       "http://staging.paarel.com",
       "staging.paarel.com",
 
@@ -69,12 +71,12 @@ const corsOptions = {
       "https://admin.paarel.com",
       "http://admin.paarel.com",
       "admin.paarel.com",
-
+  
     ];
-
+    
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-
+    
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -84,10 +86,10 @@ const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-    "Accept",
+    "Content-Type", 
+    "Authorization", 
+    "X-Requested-With", 
+    "Accept", 
     "Origin",
     "Content-Disposition" // Add this for file uploads
   ],
@@ -110,7 +112,7 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      sameSite: "none",   // important for cross-site login
+  sameSite: "none",   // important for cross-site login
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   }),
@@ -118,10 +120,10 @@ app.use(
 
 
 app.use((req, res, next) => {
-  if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
-    return res.redirect(`https://${req.hostname}${req.url}`);
-  }
-  next();
+    if (req.header('x-forwarded-proto') !== 'https' && process.env.NODE_ENV === 'production') {
+        return res.redirect(`https://${req.hostname}${req.url}`);
+    }
+    next();
 });
 
 // Passport middleware
@@ -143,7 +145,7 @@ app.use((req, res, next) => {
 })
 
 // Checking discount each minutes
-cron.schedule('* * * * *', async () => {
+cron.schedule('*/10 * * * *', async () => {
   try {
     console.log('[CRON] Running discount status check...');
     await Product.updateDiscountPrices();
@@ -151,6 +153,7 @@ cron.schedule('* * * * *', async () => {
     console.error('[CRON] Error in discount update:', error);
   }
 });
+
 startCronJobs();
 
 
@@ -182,6 +185,8 @@ app.use('/api/blogs', blogRoutes);
 app.use('/api/hero-section', heroSectionRoutes);
 app.use('/api/page-meta', pageMetaRoutes);
 app.use('/api/trending-offers', trendingOffersRoutes);
+app.use("/api/notifications", notificationRoutes);
+
 // Health check route
 app.get("/", (req, res) => {
   res.json({
@@ -281,6 +286,8 @@ app.get("/api/sitemap-categories.xml", async (req, res) => {
 app.get("/api/sitemap-subcategories.xml", async (req, res) => {
   try {
     const baseUrl = "https://paarel.com";
+
+    // parentCategoryId ফিল্ডটা ব্যবহার করে populate করা হচ্ছে
     const subcategories = await SubCategory.find({}, "slug updatedAt parentCategoryId")
       .populate("parentCategoryId", "slug");
 
@@ -329,7 +336,8 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("Connected to MongoDB")
-    app.listen(PORT, () => {
+    initSocket(server);
+    server.listen(PORT, () => { // <--- CHANGE 'app.listen' to 'server.listen'
       console.log(`Server running on port ${PORT}`)
       console.log(`Environment: ${process.env.NODE_ENV || "development"}`)
       console.log(` Health check: http://localhost:${PORT}`)
@@ -341,6 +349,3 @@ mongoose
   })
 
 export default app
-
-
-

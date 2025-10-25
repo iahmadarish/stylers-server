@@ -46,14 +46,33 @@ const pageMetaSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create slug from page name before saving
+// Auto-generate slug from pageName before saving
 pageMetaSchema.pre('save', function(next) {
-  if (this.isModified('pageName')) {
+  if (this.isModified('pageName') || !this.pageSlug) {
     this.pageSlug = this.pageName
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]/g, '-')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
+  }
+  next();
+});
+
+// Auto-generate slug before update if pageName is modified
+pageMetaSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  
+  if (update.pageName) {
+    const slug = update.pageName
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    
+    this.setUpdate({
+      ...update,
+      pageSlug: slug
+    });
   }
   next();
 });

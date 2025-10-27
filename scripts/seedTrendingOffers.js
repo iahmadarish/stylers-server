@@ -5,7 +5,7 @@ const seedOffers = [
   {
     brand: "PAARÉL",
     title: "DROP SHOULDER TEE",
-    discount: "40% off",
+    discount: "58% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/6_t0e6jd.png",
     link: "/products/men/t-shirt",
     order: 0,
@@ -14,7 +14,7 @@ const seedOffers = [
   {
     brand: "PAARÉL",
     title: "DROP SHOULDER TEE", 
-    discount: "40% off",
+    discount: "58% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/1_nfzza4.png",
     link: "/products/men/t-shirt",
     order: 1,
@@ -23,7 +23,7 @@ const seedOffers = [
   {
     brand: "PAARÉL",
     title: "DROP SHOULDER TEE",
-    discount: "40% off",
+    discount: "58% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/2_a1wwjp.png", 
     link: "/products/men/t-shirt",
     order: 2,
@@ -32,7 +32,7 @@ const seedOffers = [
   {
     brand: "PAARÉL",
     title: "TWILL CHINO PANTS",
-    discount: "40% off",
+    discount: "55% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/5_whrgex.png",
     link: "/products/men/twill-chino-pants",
     order: 3,
@@ -41,7 +41,7 @@ const seedOffers = [
   {
     brand: "PAARÉL",
     title: "WASHED DENIM",
-    discount: "40% off",
+    discount: "50% off",
     image: "https://res.cloudinary.com/dcilg3xjd/image/upload/v1758802934/4_ryx2hl.png",
     link: "/products/men/denim-and-jeans",
     order: 4,

@@ -154,6 +154,17 @@ cron.schedule('*/10 * * * *', async () => {
   }
 });
 
+
+// cron.schedule('* * * * *', async () => {
+//   try {
+//     console.log('[CRON] Running discount status check...');
+//     await Product.updateDiscountPrices();
+//   } catch (error) {
+//     console.error('[CRON] Error in discount update:', error);
+//   }
+// });
+
+
 startCronJobs();
 
 

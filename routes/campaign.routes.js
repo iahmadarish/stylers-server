@@ -26,6 +26,7 @@ router.route("/")
 router.route("/:id")
   .get(getCampaign)
   .patch(campaignUpload.single('bannerImage'), updateCampaign)
+  .put(campaignUpload.single('bannerImage'), updateCampaign) // PUT মেথড যোগ করুন
   .delete(deleteCampaign)
   
 router.post("/:id/apply", applyCampaign)

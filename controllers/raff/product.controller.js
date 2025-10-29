@@ -58,7 +58,7 @@ export const createProduct = async (req, res) => {
       const colorName = req.body[`imageColorName_${index}`] || "Unknown Color"
 
       images.push({
-        url: file.path,
+        url: file.path, // This will be the path where multer saved the file
         colorCode,
         colorName,
       })
@@ -132,32 +132,32 @@ export const createProduct = async (req, res) => {
             stock: Number.parseInt(s.stock) || 0,
           }
 
+          // okay: ONLY set variant-specific pricing if explicitly provided
           if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
             variantData.basePrice = Number.parseFloat(variant.basePrice)
           }
 
-          if (variant.discountType) {
-            variantData.discountType = variant.discountType
+          // okay: CRITICAL FIX: Only set discount fields if explicitly provided
+          // If discountPercentage is provided (even 0), set it explicitly
+          if (variant.hasOwnProperty('discountPercentage')) {
+            const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
+            variantData.discountPercentage = discountPercentage
 
-            if (variant.discountType === "percentage" && variant.discountPercentage) {
-              const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
-              variantData.discountPercentage = discountPercentage
-              if (discountPercentage > 0) {
-                variantData.discountStartTime = variant.discountStartTime
-                  ? new Date(variant.discountStartTime)
-                  : undefined
-                variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
-              }
-            } else if (variant.discountType === "fixed" && variant.discountAmount) {
-              const discountAmount = Number.parseFloat(variant.discountAmount) || 0
-              variantData.discountAmount = discountAmount
-              if (discountAmount > 0) {
-                variantData.discountStartTime = variant.discountStartTime
-                  ? new Date(variant.discountStartTime)
-                  : undefined
-                variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
-              }
+            if (discountPercentage > 0) {
+              variantData.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : undefined
+              variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+            } else {
+              // Explicitly set to 0 to prevent product-level discount inheritance
+              variantData.discountPercentage = 0
+              variantData.discountStartTime = null
+              variantData.discountEndTime = null
             }
+          } else {
+            // okay: IMPORTANT: If discountPercentage is NOT provided in the form data,
+            // set to null to explicitly indicate NO discount should be applied
+            variantData.discountPercentage = null
+            variantData.discountStartTime = null
+            variantData.discountEndTime = null
           }
 
           processedVariants.push(variantData)
@@ -178,19 +178,17 @@ export const createProduct = async (req, res) => {
       })
     }
 
+    // okay: CRITICAL FIX: Proper discount time handling
     const discountStartTime = productData.discountStartTime ? new Date(productData.discountStartTime) : undefined
     const discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : undefined
 
-    // Validate discount times if discount is provided
-    const discountType = productData.discountType
+    // okay: IMPORTANT: Validate discount times if discount is provided
     const discountPercentage = Number.parseFloat(productData.discountPercentage) || 0
-    const discountAmount = Number.parseFloat(productData.discountAmount) || 0
-
-    if ((discountPercentage > 0 || discountAmount > 0) && discountType) {
+    if (discountPercentage > 0) {
       if (!discountStartTime || !discountEndTime) {
         return res.status(400).json({
           status: "error",
-          message: "Discount start time and end time are required when discount is set",
+          message: "Discount start time and end time are required when discount percentage is set",
         })
       }
       if (discountEndTime <= discountStartTime) {
@@ -213,9 +211,8 @@ export const createProduct = async (req, res) => {
       dressTypeId: productData.dressTypeId,
       styleId: productData.styleId,
       basePrice: Number.parseFloat(productData.basePrice),
-      discountType: discountType || null,
+      // okay: CRITICAL: Set discount fields properly
       discountPercentage: discountPercentage,
-      discountAmount: discountAmount,
       discountStartTime: discountStartTime,
       discountEndTime: discountEndTime,
       images,
@@ -237,9 +234,7 @@ export const createProduct = async (req, res) => {
 
     console.log("[DEBUG] Product object before save:", {
       basePrice: newProduct.basePrice,
-      discountType: newProduct.discountType,
       discountPercentage: newProduct.discountPercentage,
-      discountAmount: newProduct.discountAmount,
       discountStartTime: newProduct.discountStartTime,
       discountEndTime: newProduct.discountEndTime,
       variantsCount: newProduct.variants.length,
@@ -247,23 +242,18 @@ export const createProduct = async (req, res) => {
 
     console.log("[DEBUG] About to save product...")
 
-    // Save the product - this will trigger pre-save hooks for price calculation
+    // okay: IMPORTANT: Save the product - this will trigger pre-save hooks for price calculation
     const savedProduct = await newProduct.save()
 
     console.log("[DEBUG] Product saved successfully with calculated prices:")
     console.log("[DEBUG] Main price:", savedProduct.price)
-    console.log(
-      "[DEBUG] Variants with prices:",
-      savedProduct.variants?.map((v) => ({
-        colorName: v.colorName,
-        size: v.size,
-        basePrice: v.basePrice,
-        price: v.price,
-        discountType: v.discountType,
-        discountPercentage: v.discountPercentage,
-        discountAmount: v.discountAmount,
-      })),
-    )
+    console.log("[DEBUG] Variants with prices:", savedProduct.variants?.map((v) => ({
+      colorName: v.colorName,
+      size: v.size,
+      basePrice: v.basePrice,
+      price: v.price,
+      discountPercentage: v.discountPercentage,
+    })))
 
     // Populate the category references for the response
     await savedProduct.populate("parentCategoryId subCategoryId dressTypeId styleId")
@@ -714,128 +704,112 @@ export const getProduct = catchAsync(async (req, res, next) => {
 
 
 export const updateProduct = catchAsync(async (req, res, next) => {
-  console.log("=== UPDATE PRODUCT START ===")
-  console.log("Product ID:", req.params.id)
-  console.log("Files received:", req.files ? req.files.length : 0)
+  console.log("=== UPDATE PRODUCT START ===");
+  console.log("Product ID:", req.params.id);
+  console.log("Files received:", req.files ? req.files.length : 0);
 
   try {
     // Parse JSON data
-    let productData
+    let productData;
     if (typeof req.body.productData === "string") {
-      productData = JSON.parse(req.body.productData)
+      productData = JSON.parse(req.body.productData);
     } else {
-      productData = req.body
+      productData = req.body;
     }
 
     console.log("Parsed product data:", {
       variantsCount: productData.variants ? productData.variants.length : 0,
       deleteImagesCount: productData.deleteImages ? productData.deleteImages.length : 0,
       basePrice: productData.basePrice,
-      discountType: productData.discountType,
       discountPercentage: productData.discountPercentage,
-      discountAmount: productData.discountAmount,
       discountStartTime: productData.discountStartTime,
       discountEndTime: productData.discountEndTime,
-    })
+    });
 
     // Get existing product
-    const existingProduct = await Product.findById(req.params.id)
+    const existingProduct = await Product.findById(req.params.id);
     if (!existingProduct) {
       return res.status(404).json({
         status: "error",
         message: "Product not found",
-      })
+      });
     }
 
     // Handle image deletions first
     if (productData.deleteImages && productData.deleteImages.length > 0) {
-      console.log("Deleting images:", productData.deleteImages)
+      console.log("Deleting images:", productData.deleteImages);
       for (const imageUrl of productData.deleteImages) {
         try {
-          const publicId = getPublicIdFromUrl(imageUrl)
-          await deleteImage(publicId)
-          console.log("Deleted image:", imageUrl)
+          const publicId = getPublicIdFromUrl(imageUrl);
+          await deleteImage(publicId);
+          console.log("Deleted image:", imageUrl);
         } catch (error) {
-          console.error("Error deleting image:", error)
+          console.error("Error deleting image:", error);
         }
       }
 
       // Remove deleted images from existing product
       existingProduct.images = existingProduct.images.filter(
-        (img) => !productData.deleteImages.includes(typeof img === "string" ? img : img.url),
-      )
+        (img) => !productData.deleteImages.includes(typeof img === "string" ? img : img.url)
+      );
     }
 
     // Process new images and create proper image structure
-    const processedImages = [...existingProduct.images]
+    const processedImages = [...existingProduct.images]; // Start with remaining existing images
 
     if (req.files && req.files.length > 0) {
-      console.log("Processing", req.files.length, "new files")
+      console.log("Processing", req.files.length, "new files");
 
+      // Add new images with proper structure
       req.files.forEach((file, fileIndex) => {
-        const colorCode = req.body[`imageColorCode_${fileIndex}`] || "#000000"
-        const colorName = req.body[`imageColorName_${fileIndex}`] || "Default"
+        const colorCode = req.body[`imageColorCode_${fileIndex}`] || "#000000";
+        const colorName = req.body[`imageColorName_${fileIndex}`] || "Default";
 
         processedImages.push({
           url: file.path,
           colorCode: colorCode,
           colorName: colorName,
-        })
+        });
 
-        console.log("Added new image with color:", colorCode, colorName)
-      })
+        console.log("Added new image with color:", colorCode, colorName);
+      });
     }
     // Update the product images
-    existingProduct.images = processedImages
+    existingProduct.images = processedImages;
 
+    // okay: CRITICAL: Update product-level pricing with time validation
     if (productData.basePrice !== undefined) {
-      existingProduct.basePrice = Number.parseFloat(productData.basePrice)
+      existingProduct.basePrice = Number.parseFloat(productData.basePrice);
     }
 
-    if (productData.discountType) {
-      existingProduct.discountType = productData.discountType
+    // okay: FIXED: Only update discount times if new values are explicitly provided
+    if (productData.discountPercentage !== undefined) {
+      const newDiscountPercentage = Number.parseFloat(productData.discountPercentage) || 0;
+      existingProduct.discountPercentage = newDiscountPercentage;
 
-      if (productData.discountType === "percentage" && productData.discountPercentage !== undefined) {
-        const newDiscountPercentage = Number.parseFloat(productData.discountPercentage) || 0
-        existingProduct.discountPercentage = newDiscountPercentage
-        existingProduct.discountAmount = 0
+      // Only update times if they are explicitly provided in the request
+      if (productData.discountStartTime !== undefined) {
+        existingProduct.discountStartTime = productData.discountStartTime
+          ? new Date(productData.discountStartTime)
+          : null;
+      }
 
-        if (newDiscountPercentage > 0) {
-          if (productData.discountStartTime !== undefined) {
-            existingProduct.discountStartTime = productData.discountStartTime
-              ? new Date(productData.discountStartTime)
-              : null
-          }
-          if (productData.discountEndTime !== undefined) {
-            existingProduct.discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : null
-          }
-        } else {
-          existingProduct.discountStartTime = null
-          existingProduct.discountEndTime = null
-        }
-      } else if (productData.discountType === "fixed" && productData.discountAmount !== undefined) {
-        const newDiscountAmount = Number.parseFloat(productData.discountAmount) || 0
-        existingProduct.discountAmount = newDiscountAmount
-        existingProduct.discountPercentage = 0
+      if (productData.discountEndTime !== undefined) {
+        existingProduct.discountEndTime = productData.discountEndTime
+          ? new Date(productData.discountEndTime)
+          : null;
+      }
 
-        if (newDiscountAmount > 0) {
-          if (productData.discountStartTime !== undefined) {
-            existingProduct.discountStartTime = productData.discountStartTime
-              ? new Date(productData.discountStartTime)
-              : null
-          }
-          if (productData.discountEndTime !== undefined) {
-            existingProduct.discountEndTime = productData.discountEndTime ? new Date(productData.discountEndTime) : null
-          }
-        } else {
-          existingProduct.discountStartTime = null
-          existingProduct.discountEndTime = null
-        }
+      // If discount is being set to 0, clear the times
+      if (newDiscountPercentage <= 0) {
+        existingProduct.discountStartTime = null;
+        existingProduct.discountEndTime = null;
       }
     }
 
+    // okay: Process variants with proper pricing logic
     if (productData.variants && Array.isArray(productData.variants)) {
-      console.log("Processing variants:", productData.variants.length)
+      console.log("Processing variants:", productData.variants.length);
 
       const processedVariants = productData.variants.map((variant) => {
         const processedVariant = {
@@ -846,54 +820,31 @@ export const updateProduct = catchAsync(async (req, res, next) => {
           dimension: variant.dimension || "",
           stock: Number.parseInt(variant.stock) || 0,
           productCode: variant.productCode || generateProductCode(),
-        }
-
+        };
         if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-          processedVariant.basePrice = Number.parseFloat(variant.basePrice)
+          processedVariant.basePrice = Number.parseFloat(variant.basePrice);
         }
+        if (variant.discountPercentage !== undefined && variant.discountPercentage !== null && variant.discountPercentage !== "") {
+          const newVariantDiscountPercentage = Number.parseFloat(variant.discountPercentage);
 
-        if (variant.discountType) {
-          processedVariant.discountType = variant.discountType
-
-          if (variant.discountType === "percentage" && variant.discountPercentage !== undefined) {
-            const newVariantDiscountPercentage = Number.parseFloat(variant.discountPercentage)
-            processedVariant.discountPercentage = newVariantDiscountPercentage
-            processedVariant.discountAmount = 0
-
-            if (newVariantDiscountPercentage > 0) {
-              processedVariant.discountStartTime = variant.discountStartTime
-                ? new Date(variant.discountStartTime)
-                : new Date()
-              processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null
-            } else {
-              processedVariant.discountStartTime = null
-              processedVariant.discountEndTime = null
-            }
-          } else if (variant.discountType === "fixed" && variant.discountAmount !== undefined) {
-            const newVariantDiscountAmount = Number.parseFloat(variant.discountAmount)
-            processedVariant.discountAmount = newVariantDiscountAmount
-            processedVariant.discountPercentage = 0
-
-            if (newVariantDiscountAmount > 0) {
-              processedVariant.discountStartTime = variant.discountStartTime
-                ? new Date(variant.discountStartTime)
-                : new Date()
-              processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null
-            } else {
-              processedVariant.discountStartTime = null
-              processedVariant.discountEndTime = null
-            }
+          if (newVariantDiscountPercentage <= 0) {
+            processedVariant.discountPercentage = 0;
+            processedVariant.discountStartTime = null;
+            processedVariant.discountEndTime = null;
+          } else {
+            processedVariant.discountPercentage = newVariantDiscountPercentage;
+            processedVariant.discountStartTime = variant.discountStartTime ? new Date(variant.discountStartTime) : new Date();
+            processedVariant.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : null;
           }
         }
 
-        return processedVariant
-      })
-
+        return processedVariant;
+      });
       // Calculate total stock from variants
-      const totalStock = processedVariants.reduce((sum, variant) => sum + (variant.stock || 0), 0)
-      existingProduct.variants = processedVariants
-      existingProduct.stock = totalStock
-      console.log("Processed variants with pricing:", processedVariants.length)
+      const totalStock = processedVariants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
+      existingProduct.variants = processedVariants;
+      existingProduct.stock = totalStock;
+      console.log("Processed variants with pricing:", processedVariants.length);
     }
 
     // Update other fields
@@ -902,36 +853,34 @@ export const updateProduct = catchAsync(async (req, res, next) => {
       "images",
       "deleteImages",
       "price",
-      "discountType",
       "discountPercentage",
-      "discountAmount",
       "discountStartTime",
       "discountEndTime",
-    ]
+    ];
 
     if (productData.isActive !== undefined) {
-      existingProduct.isActive = productData.isActive
-      console.log(`[DEBUG] Updating isActive to: ${productData.isActive}`)
+      existingProduct.isActive = productData.isActive;
+      console.log(`[DEBUG] Updating isActive to: ${productData.isActive}`);
     }
 
     Object.keys(productData).forEach((key) => {
       if (productData[key] !== undefined && !excludedFields.includes(key)) {
-        existingProduct[key] = productData[key]
+        existingProduct[key] = productData[key];
       }
-    })
+    });
 
-    // Save the product
-    const updatedProduct = await existingProduct.save()
+    //IMPORTANT: Save the product
+    const updatedProduct = await existingProduct.save();
 
     await updatedProduct.populate([
       { path: "parentCategoryId", select: "name slug" },
       { path: "subCategoryId", select: "name slug" },
       { path: "dressTypeId", select: "name slug" },
       { path: "styleId", select: "name slug" },
-    ])
+    ]);
 
-    console.log("Product updated successfully with calculated prices:")
-    console.log("Main price:", updatedProduct.price)
+    console.log("Product updated successfully with calculated prices:");
+    console.log("Main price:", updatedProduct.price);
     console.log(
       "Variants with calculated prices:",
       updatedProduct.variants?.map((v) => ({
@@ -939,26 +888,24 @@ export const updateProduct = catchAsync(async (req, res, next) => {
         size: v.size,
         basePrice: v.basePrice,
         price: v.price,
-        discountType: v.discountType,
         discountPercentage: v.discountPercentage,
-        discountAmount: v.discountAmount,
-      })),
-    )
+      }))
+    );
 
     res.status(200).json({
       status: "success",
       data: {
         product: updatedProduct,
       },
-    })
+    });
   } catch (error) {
-    console.error("Error updating product:", error)
+    console.error("Error updating product:", error);
     res.status(500).json({
       status: "error",
       message: error.message || "Internal server error",
-    })
+    });
   }
-})
+});
 
 
 

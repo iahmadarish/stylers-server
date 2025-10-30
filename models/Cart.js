@@ -151,56 +151,198 @@ cartSchema.methods.calculateTotals = function () {
 // ✅ Method to check if any discounts have expired and update prices
 cartSchema.methods.refreshPrices = async function () {
   const Product = mongoose.model("Product")
+  const now = new Date()
   
-  for (let item of this.items) {
+  let updatedItemsCount = 0
+  let campaignEndedItems = []
+
+  console.log("🔄 Starting cart price refresh...")
+
+  for (let [index, item] of this.items.entries()) {
     try {
       const product = await Product.findById(item.productId)
-      if (!product) continue
+      if (!product) {
+        console.warn(`⚠️ Product not found for item ${index}:`, item.productId)
+        continue
+      }
 
-      let currentPrice = 0
-      let currentBasePrice = 0
-      let currentDiscount = 0
-      let discountActive = false
+      if (!product.isActive) {
+        console.warn(`⚠️ Product is inactive:`, product.title)
+        // You can choose to remove inactive products or keep them
+        continue
+      }
 
-      if (item.variantId && product.variants.length > 0) {
-        // Get current variant price
-        const variant = product.variants.id(item.variantId)
-        if (variant) {
-          currentPrice = product.getCurrentPrice(item.variantId)
-          currentBasePrice = variant.basePrice || product.basePrice
-          
-          // Check if variant discount is active
-          discountActive = product.isVariantDiscountActive(item.variantId)
-          if (discountActive) {
-            currentDiscount = variant.discountPercentage || product.discountPercentage
-          }
-        }
-      } else {
-        // Get current product price
-        currentPrice = product.getCurrentPrice()
-        currentBasePrice = product.basePrice
-        
-        // Check if product discount is active
-        discountActive = product.isDiscountActive()
-        if (discountActive) {
-          currentDiscount = product.discountPercentage
+      let variant = null
+      if (item.variantId && product.variants && product.variants.length > 0) {
+        variant = product.variants.id(item.variantId)
+        if (!variant) {
+          console.warn(`⚠️ Variant not found:`, item.variantId)
         }
       }
 
-      // Update item prices if they have changed
-      item.basePrice = currentBasePrice
-      item.discountedPrice = currentPrice
-      item.discountPercentage = currentDiscount
-      item.wasDiscountActive = discountActive
-      item.totalPrice = Math.round(currentPrice * item.quantity)
-      
+      // Store old prices for comparison
+      const oldDiscountedPrice = item.discountedPrice
+      const oldWasDiscountActive = item.wasDiscountActive
+
+      // Calculate current pricing
+      const { currentPrice, currentBasePrice, currentDiscount, discountActive, discountType } = 
+        await this.calculateCurrentItemPrice(product, variant, now)
+
+      // Check if prices changed
+      const priceChanged = 
+        oldDiscountedPrice !== currentPrice ||
+        oldWasDiscountActive !== discountActive
+
+      if (priceChanged) {
+        updatedItemsCount++
+
+        // Track campaign ended items
+        if (oldWasDiscountActive && !discountActive) {
+          campaignEndedItems.push(product.title)
+        }
+
+        console.log(`💰 Price updated for "${product.title}":`, {
+          oldPrice: oldDiscountedPrice,
+          newPrice: currentPrice,
+          oldDiscountActive: oldWasDiscountActive,
+          newDiscountActive: discountActive,
+          variant: variant?.size
+        })
+
+        // Update item with new prices
+        item.basePrice = currentBasePrice
+        item.originalPrice = currentBasePrice
+        item.discountedPrice = currentPrice
+        item.discountPercentage = currentDiscount
+        item.discountAmount = currentBasePrice - currentPrice
+        item.wasDiscountActive = discountActive
+        item.totalPrice = Math.round(currentPrice * item.quantity)
+
+        // Update discount timing if available
+        if (variant) {
+          item.discountStartTime = variant.discountStartTime
+          item.discountEndTime = variant.discountEndTime
+        } else {
+          item.discountStartTime = product.discountStartTime
+          item.discountEndTime = product.discountEndTime
+        }
+      }
+
     } catch (error) {
-      console.error(`Error refreshing price for item ${item._id}:`, error)
+      console.error(`❌ Error refreshing price for item ${index}:`, error)
+      // Continue with other items even if one fails
     }
   }
 
+  // Recalculate cart totals
   this.calculateTotals()
-  return this
+
+  console.log(`✅ Price refresh completed: ${updatedItemsCount} items updated`)
+  if (campaignEndedItems.length > 0) {
+    console.log(`🎯 Campaigns ended for:`, campaignEndedItems)
+  }
+
+  return {
+    updatedItemsCount,
+    campaignEndedItems,
+    totalBaseAmount: this.totalBaseAmount,
+    finalAmount: this.finalAmount,
+    totalDiscountAmount: this.totalDiscountAmount
+  }
+}
+
+
+cartSchema.methods.calculateCurrentItemPrice = async function (product, variant, currentTime = new Date()) {
+  let currentPrice = 0
+  let currentBasePrice = 0
+  let currentDiscount = 0
+  let discountActive = false
+  let discountType = "none"
+
+  const isCampaignActive = (item) => {
+    if (!item.discountStartTime && !item.discountEndTime) {
+      return (item.discountPercentage > 0 || item.discountAmount > 0)
+    }
+    
+    const startTime = item.discountStartTime ? new Date(item.discountStartTime) : null
+    const endTime = item.discountEndTime ? new Date(item.discountEndTime) : null
+    
+    if (startTime && endTime) {
+      return currentTime >= startTime && currentTime <= endTime
+    } else if (startTime && !endTime) {
+      return currentTime >= startTime
+    } else if (!startTime && endTime) {
+      return currentTime <= endTime
+    }
+    
+    return false
+  }
+
+  if (variant) {
+    // Use variant pricing
+    currentBasePrice = variant.basePrice || product.basePrice || variant.price || product.price || 0
+    currentPrice = variant.price || product.price || 0
+    
+    // Check if variant discount is active
+    const variantDiscountActive = isCampaignActive(variant)
+    
+    if (variantDiscountActive) {
+      // Campaign is active - use discounted price
+      discountActive = true
+      discountType = variant.discountType || "percentage"
+      
+      if (discountType === "fixed" && variant.discountAmount > 0) {
+        currentDiscount = 0 // For fixed amount, we don't store percentage
+        currentPrice = Math.max(0, currentBasePrice - variant.discountAmount)
+      } else {
+        currentDiscount = variant.discountPercentage || 0
+        currentPrice = currentBasePrice - (currentBasePrice * currentDiscount / 100)
+      }
+    } else {
+      // Campaign ended - use base price
+      discountActive = false
+      currentDiscount = 0
+      currentPrice = currentBasePrice
+    }
+  } else {
+    // Use product pricing
+    currentBasePrice = product.basePrice || product.price || 0
+    currentPrice = product.price || 0
+    
+    // Check if product discount is active
+    const productDiscountActive = isCampaignActive(product)
+    
+    if (productDiscountActive) {
+      // Campaign is active - use discounted price
+      discountActive = true
+      discountType = product.discountType || "percentage"
+      
+      if (discountType === "fixed" && product.discountAmount > 0) {
+        currentDiscount = 0
+        currentPrice = Math.max(0, currentBasePrice - product.discountAmount)
+      } else {
+        currentDiscount = product.discountPercentage || 0
+        currentPrice = currentBasePrice - (currentBasePrice * currentDiscount / 100)
+      }
+    } else {
+      // Campaign ended - use base price
+      discountActive = false
+      currentDiscount = 0
+      currentPrice = currentBasePrice
+    }
+  }
+
+  // Ensure prices are valid
+  currentBasePrice = Math.max(0.01, currentBasePrice)
+  currentPrice = Math.max(0.01, currentPrice)
+
+  return {
+    currentPrice,
+    currentBasePrice,
+    currentDiscount,
+    discountActive,
+    discountType
+  }
 }
 
 // ✅ Pre-save middleware to calculate totals

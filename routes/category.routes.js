@@ -30,6 +30,8 @@ import {
   getStylesForAdmin,
   getStyleForAdmin,
   getCategoryHierarchyForAdmin,
+  getParentCategoriesForCampaign,
+  getSubCategoriesForCampaign
 } from "../controllers/category.controller.js"
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
 import { categoryUpload } from "../utils/cloudinary.js"
@@ -38,6 +40,9 @@ const router = express.Router()
 
 // Admin view routes - authentication required
 router.get("/hierarchy/admin", protect, restrictTo("admin", "executive"), getCategoryHierarchyForAdmin)
+router.get("/parent/campaign", protect, restrictTo("admin", "executive"), getParentCategoriesForCampaign)
+router.get("/sub/campaign", protect, restrictTo("admin", "executive"), getSubCategoriesForCampaign)
+
 router.get("/parent/admin", protect, restrictTo("admin", "executive"), getParentCategoriesForAdmin)
 router.get("/sub/admin", protect, restrictTo("admin", "executive"), getSubCategoriesForAdmin)
 router.get("/dress-type/admin", protect, restrictTo("admin", "executive"), getDressTypesForAdmin)

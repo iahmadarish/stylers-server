@@ -5,66 +5,326 @@ import SubCategory from "../models/SubCategory.js"
 import catchAsync from "../utils/catchAsync.js"
 import AppError from "../utils/appError.js"
 import { deleteImage, getPublicIdFromUrl } from "../utils/cloudinary.js"
-
+import mongoose from "mongoose"
 // @desc    Create a campaign
 // @route   POST /api/campaigns
 // @access  Private/Admin
+// @desc    Create a campaign
+
 export const createCampaign = catchAsync(async (req, res, next) => {
-  const campaignData = typeof req.body.campaignData === "string" ? JSON.parse(req.body.campaignData) : req.body
-  const bannerImage = req.file ? req.file.path : undefined
+  try {
+    console.log('[CREATE CAMPAIGN] Request received')
+    let campaignData
+    try {
+      campaignData = typeof req.body.campaignData === "string" ? JSON.parse(req.body.campaignData) : req.body
+      console.log('[CREATE CAMPAIGN] Data parsed successfully')
+    } catch (parseError) {
+      console.error('[CREATE CAMPAIGN] JSON parse error:', parseError)
+      // FIX: Direct Response
+      return res.status(400).json({ success: false, message: "Invalid JSON data" })
+    }
 
-console.log('🕒 Campaign Time Analysis:', {
-    receivedStart: campaignData.startDate,
-    receivedEnd: campaignData.endDate,
-    bangladeshStart: new Date(campaignData.startDate).toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' }),
-    bangladeshEnd: new Date(campaignData.endDate).toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' })
-  });
+    const bannerImage = req.file ? req.file.path : undefined
+    console.log('[CREATE CAMPAIGN] Banner image:', bannerImage ? 'Provided' : 'Not provided')
 
+    console.log('[CREATE CAMPAIGN] Campaign Data:', {
+      title: campaignData.title,
+      type: campaignData.type,
+      discountType: campaignData.discountType,
+      discountValue: campaignData.discountValue,
+      targetIds: campaignData.targetIds,
+      startDate: campaignData.startDate,
+      endDate: campaignData.endDate
+    })
 
-  const { title, type, targetIds, discountType, discountValue, startDate, endDate, couponCode } = campaignData
+    const { title, type, targetIds, discountType, discountValue, startDate, endDate, couponCode } = campaignData
+    console.log('[CREATE CAMPAIGN] Starting validation...')
+    
+    // --- Basic Validations (Direct Response Fix) ---
+    if (!title || !title.trim()) {
+      console.log('[CREATE CAMPAIGN] Title validation failed')
+      return res.status(400).json({ success: false, message: "Campaign title is required" })
+    }
 
-  // ✅ সময় ভ্যালিডেশন যোগ করুন
-  const now = new Date()
-  const campaignStartDate = new Date(startDate)
-  const campaignEndDate = new Date(endDate)
+    if (!type) {
+      console.log('[CREATE CAMPAIGN] Type validation failed')
+      return res.status(400).json({ success: false, message: "Campaign type is required" })
+    }
 
-  if (campaignStartDate <= now) {
-    return next(new AppError("Campaign start date must be in the future", 400))
+    if (!discountType) {
+      console.log('[CREATE CAMPAIGN] Discount type validation failed')
+      return res.status(400).json({ success: false, message: "Discount type is required" })
+    }
+
+    if (discountValue === undefined || discountValue === null) {
+      console.log('[CREATE CAMPAIGN] Discount value validation failed')
+      return res.status(400).json({ success: false, message: "Discount value is required" })
+    }
+
+    if (!startDate) {
+      console.log('[CREATE CAMPAIGN] Start date validation failed')
+      return res.status(400).json({ success: false, message: "Start date is required" })
+    }
+
+    if (!endDate) {
+      console.log('[CREATE CAMPAIGN] End date validation failed')
+      return res.status(400).json({ success: false, message: "End date is required" })
+    }
+
+    console.log('[CREATE CAMPAIGN] Basic validation passed')
+
+    // Validation: Target IDs
+    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
+      console.log('[CREATE CAMPAIGN] Target IDs validation failed')
+      return res.status(400).json({ success: false, message: "At least one target must be selected" })
+    }
+
+    console.log(`[CREATE CAMPAIGN] Validating ${targetIds.length} target IDs`)
+
+    // Convert discountValue to number
+    const numericDiscountValue = Number(discountValue)
+    if (isNaN(numericDiscountValue)) {
+      console.log('[CREATE CAMPAIGN] Discount value is not a number')
+      return res.status(400).json({ success: false, message: "Discount value must be a number" })
+    }
+
+    console.log(`[CREATE CAMPAIGN] Discount value: ${numericDiscountValue} (${discountType})`)
+
+    // --- Discount Validation (Direct Response Fix) ---
+    if (discountType === "percentage") {
+      if (numericDiscountValue <= 0 || numericDiscountValue > 100) {
+        console.log('[CREATE CAMPAIGN] Percentage discount validation failed')
+        // FIX: Direct Response (Expected Error: 'Discount percentage must be between 1 and 100')
+        return res.status(400).json({ success: false, message: "Discount percentage must be between 1 and 100" })
+      }
+    } else if (discountType === "fixed") {
+      if (numericDiscountValue <= 0) {
+        console.log(' [CREATE CAMPAIGN] Fixed discount validation failed')
+        return res.status(400).json({ success: false, message: "Fixed discount amount must be greater than 0" })
+      }
+    } else {
+      console.log('[CREATE CAMPAIGN] Invalid discount type')
+      return res.status(400).json({ success: false, message: "Invalid discount type" })
+    }
+
+    // --- Time validation (Direct Response Fix) ---
+    const now = new Date()
+    const campaignStartDate = new Date(startDate)
+    const campaignEndDate = new Date(endDate)
+
+    console.log('⏰ [CREATE CAMPAIGN] Date validation:', {
+      now: now.toISOString(),
+      start: campaignStartDate.toISOString(),
+      end: campaignEndDate.toISOString()
+    })
+
+    // Check if dates are valid
+    if (isNaN(campaignStartDate.getTime()) || isNaN(campaignEndDate.getTime())) {
+      console.log('[CREATE CAMPAIGN] Invalid date format')
+      return res.status(400).json({ success: false, message: "Invalid date format" })
+    }
+
+    // FIX: Start date must be in future (allowing a small buffer, but logic remains the same)
+    if (campaignStartDate <= now) {
+      console.log('[CREATE CAMPAIGN] Start date must be in future')
+      return res.status(400).json({ success: false, message: "Campaign start date must be in the future" })
+    }
+
+    if (campaignEndDate <= campaignStartDate) {
+      console.log('[CREATE CAMPAIGN] End date must be after start date')
+      return res.status(400).json({ success: false, message: "Campaign end date must be after start date" })
+    }
+
+    console.log('[CREATE CAMPAIGN] Date validation passed')
+
+    // --- Target validation based on campaign type ---
+    if (type === "product") {
+      console.log(`[CREATE CAMPAIGN] Validating ${targetIds.length} products`)
+      
+      // 1. Check if all targetIds are valid Product IDs
+      for (const productId of targetIds) {
+        try {
+          // Check if ID is a valid MongoDB ObjectId
+          if (!mongoose.Types.ObjectId.isValid(productId)) {
+            console.log(`[CREATE CAMPAIGN] Invalid Product ID format: ${productId}`)
+            return res.status(400).json({ success: false, message: `Invalid Product ID format: ${productId}` })
+          }
+
+          const product = await Product.findById(productId)
+          if (!product) {
+            console.log(`[CREATE CAMPAIGN] Product not found: ${productId}`)
+            return res.status(404).json({ success: false, message: `Product not found: ${productId}` })
+          }
+          
+          console.log(`[CREATE CAMPAIGN] Product validated: ${product.title}`)
+        } catch (dbError) {
+          console.error(`[CREATE CAMPAIGN] Database error for product ${productId}:`, dbError)
+          return res.status(500).json({ success: false, message: "Error validating products" })
+        }
+      }
+      
+      // 2. PRODUCT-TO-PRODUCT CONFLICT CHECK (Direct Response Fix)
+      const existingProductCampaigns = await Campaign.find({
+        type: 'product',
+        // Look for campaigns that include any of the new targetIds
+        targetIds: { $in: targetIds },
+        // The campaign's end date must be in the future (meaning it's active or pending start)
+        endDate: { $gt: now }, 
+      }).select('title').lean()
+
+      if (existingProductCampaigns.length > 0) {
+        const campaignTitles = existingProductCampaigns.map(c => c.title).join(', ')
+        console.log(`[CREATE CAMPAIGN] Conflict found with existing Product campaigns: ${campaignTitles}`)
+        
+        // FIX: Direct Response for 409 Conflict
+        return res.status(409).json({
+          success: false,
+          message: `Conflict Error: One or more selected products are already targeted by the following active Product Campaign(s): ${campaignTitles}. Please end those campaigns first or use these campaign.`,
+        })
+      }
+      
+    } else if (type === "category") {
+      console.log(`[CREATE CAMPAIGN] Validating ${targetIds.length} categories`)
+      const productsInTargetCategories = []
+      
+      for (const categoryId of targetIds) {
+        try {
+          if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+            console.log(`[CREATE CAMPAIGN] Invalid Category ID format: ${categoryId}`)
+            return res.status(400).json({ success: false, message: `Invalid Category ID format: ${categoryId}` })
+          }
+
+          const parentCategory = await ParentCategory.findById(categoryId)
+          const subCategory = await SubCategory.findById(categoryId)
+          
+          if (!parentCategory && !subCategory) {
+            console.log(`[CREATE CAMPAIGN] Category not found: ${categoryId}`)
+            return res.status(404).json({ success: false, message: `Category not found: ${categoryId}` })
+          }
+          
+          let productQuery = {}
+          if (parentCategory) {
+            console.log(`[CREATE CAMPAIGN] Parent category validated: ${parentCategory.name}`)
+            productQuery.parentCategoryId = categoryId
+          } else if (subCategory) {
+            console.log(`[CREATE CAMPAIGN] Sub category validated: ${subCategory.name}`)
+            productQuery.subCategoryId = categoryId
+          }
+          // Find all products in this category/subcategory
+          const categoryProducts = await Product.find(productQuery).select('_id title')
+          productsInTargetCategories.push(...categoryProducts)
+
+        } catch (dbError) {
+          console.error(`[CREATE CAMPAIGN] Database error for category ${categoryId}:`, dbError)
+          return res.status(500).json({ success: false, message: "Error validating categories" })
+        }
+      }
+      
+      // 3. CATEGORY-TO-PRODUCT CONFLICT CHECK (Direct Response Fix)
+      if (productsInTargetCategories.length > 0) {
+          const productIds = productsInTargetCategories.map(p => p._id)
+          // Find existing 'product' campaigns that target any of these products
+          const existingProductCampaignsInCategories = await Campaign.find({
+              type: 'product',
+              targetIds: { $in: productIds },
+              endDate: { $gt: now }, 
+          }).select('title targetIds').lean()
+
+          if (existingProductCampaignsInCategories.length > 0) {
+              const campaignTitles = existingProductCampaignsInCategories.map(c => c.title).join(', ')
+              
+              const productTitles = existingProductCampaignsInCategories.reduce((acc, campaign) => {
+                  campaign.targetIds.forEach(targetId => {
+                      const product = productsInTargetCategories.find(p => p._id.toString() === targetId.toString())
+                      if (product) acc.add(product.title)
+                  })
+                  return acc
+              }, new Set())
+              
+              const affectedProducts = Array.from(productTitles).join(', ')
+
+              console.log(`[CREATE CAMPAIGN] Conflict found with existing Product campaigns: ${campaignTitles}. Affected Products: ${affectedProducts}`)
+              // FIX: Direct Response for 409 Conflict
+              return res.status(409).json({
+                  success: false,
+                  message: `Validation Error: One or more products in this category already have a conflicting active Product Campaign. Affected Products: ${affectedProducts}. Affected Campaigns: ${campaignTitles}. Please end those campaigns first.`, 
+              })
+          }
+      }
+      
+    } else {
+      console.log('[CREATE CAMPAIGN] Invalid campaign type')
+      return res.status(400).json({ success: false, message: "Invalid campaign type" })
+    }
+
+    console.log('[CREATE CAMPAIGN] All validations passed')
+    console.log(`[CREATE CAMPAIGN] Creating campaign in database...`)
+    
+    // --- Database Creation ---
+    let campaign
+    try {
+      campaign = await Campaign.create({
+        title: title.trim(),
+        type,
+        targetIds,
+        discountType,
+        discountValue: numericDiscountValue,
+        startDate: campaignStartDate,
+        endDate: campaignEndDate,
+        bannerImage,
+        couponCode: couponCode?.trim(),
+        isActive: campaignData.isActive === true,
+      })
+      console.log(`[CREATE CAMPAIGN] Campaign created successfully: ${campaign.title} (ID: ${campaign._id})`)
+    } catch (createError) {
+      console.error('[CREATE CAMPAIGN] Database create error:', createError)
+      
+      // Handle Mongoose Validation Error (if it happens during .create())
+      if (createError.name === 'ValidationError') {
+        const validationMessage = Object.values(createError.errors).map(val => val.message).join('; ');
+        // FIX: Direct Response for Mongoose Validation
+        return res.status(400).json({ success: false, message: validationMessage });
+      }
+
+      // Handle Duplicate Key Error (if you had unique index on couponCode)
+      if (createError.code === 11000) {
+        return res.status(400).json({ success: false, message: `Duplicate value found for field: ${Object.keys(createError.keyValue)[0]}.` });
+      }
+
+      // For other unexpected database errors, let the global error handler manage it
+      return next(createError)
+    }
+
+    console.log(`[CREATE CAMPAIGN] Sending success response`)
+    res.status(201).json({
+      status: "success",
+      message: "Campaign created successfully",
+      data: {
+        campaign: {
+          _id: campaign._id,
+          title: campaign.title,
+          type: campaign.type,
+          discountType: campaign.discountType,
+          discountValue: campaign.discountValue,
+          startDate: campaign.startDate,
+          endDate: campaign.endDate,
+          isActive: campaign.isActive,
+          targetIds: campaign.targetIds,
+          bannerImage: campaign.bannerImage,
+          couponCode: campaign.couponCode,
+          createdAt: campaign.createdAt
+        }
+      },
+    })
+
+    console.log('✅ [CREATE CAMPAIGN] Process completed successfully')
+
+  } catch (error) {
+    console.error('💥 [CREATE CAMPAIGN] Unexpected error in outer try/catch:', error)
+    // সমস্ত অপ্রত্যাশিত এরর গ্লোবাল এরর হ্যান্ডলারের কাছে পাঠানো হলো
+    return next(error)
   }
-
-  if (campaignEndDate <= campaignStartDate) {
-    return next(new AppError("Campaign end date must be after start date", 400))
-  }
-
-  // ... existing validation code ...
-
-  // Create campaign
-  const campaign = await Campaign.create({
-    title,
-    type,
-    targetIds,
-    discountType,
-    discountValue,
-    startDate: campaignStartDate,
-    endDate: campaignEndDate,
-    bannerImage,
-    couponCode,
-  })
-
-  // ✅ FIX: Campaign start date future হলে এখনই apply করবেন না
-  // শুধুমাত্র যদি campaign এখনই active হয় তবেই apply করুন
-  if (campaignStartDate <= now && campaignEndDate >= now) {
-    await applyDiscounts(campaign)
-  }
-
-  res.status(201).json({
-    status: "success",
-    data: {
-      campaign,
-    },
-  })
 })
-
 // @desc    Get all campaigns
 // @route   GET /api/campaigns
 // @access  Private/Admin

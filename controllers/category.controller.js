@@ -65,7 +65,23 @@ export const getParentCategoriesForAdmin = catchAsync(async (req, res, next) => 
     },
   })
 })
- 
+
+export const getParentCategoriesForCampaign = async (req, res) => {
+  try {
+    const categories = await ParentCategory.find({ isActive: true }).select('_id name'); 
+    
+    res.status(200).json({ 
+      success: true, 
+      // AddCampaign.tsx এই structureটি আশা করে (যদি `data.parentcategories` বা সরাসরি অ্যারে না থাকে)
+      data: { parentcategories: categories }, 
+      message: "Parent categories fetched for campaign successfully"
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+
 // @desc    Get parent category by ID (Public - only if active)
 // @route   GET /api/categories/parent/:id
 // @access  Public
@@ -268,6 +284,29 @@ export const getSubCategories = catchAsync(async (req, res, next) => {
   })
 })
 
+export const getSubCategoriesForCampaign = async (req, res) => {
+  try {
+    const subCategories = await SubCategory.find({ isActive: true })
+      .select('_id name parentCategoryId')
+      .populate('parentCategoryId', 'name'); 
+
+    // নামকে Parent Category এর সাথে জুড়ে ফ্রন্টএন্ডের জন্য সাজানো
+    const formattedSubCategories = subCategories.map(sub => ({
+        _id: sub._id,
+        // ফ্রন্টএন্ডে দেখতে সুবিধা হবে: T-Shirt (Men's Fashion)
+        name: `${sub.name} (${sub.parentCategoryId ? sub.parentCategoryId.name : 'No Parent'})`, 
+        parentCategoryId: sub.parentCategoryId ? sub.parentCategoryId._id : null
+    }));
+    
+    res.status(200).json({ 
+      success: true, 
+      data: { subcategories: formattedSubCategories }, // ফ্রন্টএন্ডের প্রত্যাশিত structure
+      message: "Sub categories fetched for campaign successfully"
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
 // @desc    Get all sub categories (Admin - all categories)
 // @route   GET /api/categories/sub/admin
 // @access  Private/Admin

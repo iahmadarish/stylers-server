@@ -7,7 +7,29 @@ import { createPathaoOrder } from "../services/pathaoService.js";
 import { PATHAO_BASE_URL } from "../services/pathaoService.js";
 import { getIo } from "../utils/socket.js"
 
-// Existing createOrder function (unchanged for logged-in users)
+
+// ##########################################################
+// GENERATING ORDER NUMBER BY FOLLWING CLIENT REQUIREMENTS BY DATE MONTH YEAR TIME FRAMME. 
+// ##########################################################
+const generateOrderNumber = (isGuest = false) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  
+  const prefix = isGuest ? 'GST' : 'ORD';
+  
+  return `${prefix}${year}${month}${day}${hours}${minutes}${randomNum}`;
+};
+
+
+// ##########################################################
+// updated this function for comprehensive order updates
+// ##########################################################
+
 export const createOrder = async (req, res) => {
   try {
     const { userId, shippingAddress, paymentMethod, shippingCost = 0 } = req.body;
@@ -77,9 +99,7 @@ export const createOrder = async (req, res) => {
     const totalAmount = subtotal + shippingCost;
 
     // Generate order number
-    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)
-      .toString()
-      .padStart(4, "0")}`;
+    const orderNumber = generateOrderNumber(false);
 
     // Create order
     const order = new Order({
@@ -185,6 +205,10 @@ export const createOrder = async (req, res) => {
   }
 };
 
+
+// ##########################################################
+// THIS IS MAIN FUNCTION FOR CREATING ORDER AS A GUEST USER. 
+// ##########################################################
 
 export const createGuestOrder = async (req, res) => {
   try {
@@ -341,9 +365,8 @@ export const createGuestOrder = async (req, res) => {
     });
 
     // Generate unique order number for guest
-    const orderNumber = `GUEST-${Date.now()}-${Math.floor(Math.random() * 10000)
-      .toString()
-      .padStart(4, "0")}`;
+    const orderNumber = generateOrderNumber(true);
+
 
     // Prepare billing address - handle both cases
     const finalBillingAddress =
@@ -468,7 +491,9 @@ try {
 };
 
 
-// Helper function to update product stock
+// ##########################################################
+// FUNCTION FOR UPDATE PRODUCT STOCK AFTER ORDER PLACED BY USER AND GUEST BOTH. 
+// ##########################################################
 const updateProductStock = async (orderItems) => {
   for (const item of orderItems) {
     const product = await Product.findById(item.productId)
@@ -493,7 +518,9 @@ const updateProductStock = async (orderItems) => {
   }
 }
 
-// NEW: Get guest order by order number
+// ##########################################################
+// GUEST ORDER FUNCTION FOR GET ORDER DETAILS IN TRACKING PAGE
+// ##########################################################
 export const getGuestOrder = async (req, res) => {
   try {
     const { orderNumber } = req.params
@@ -523,7 +550,9 @@ export const getGuestOrder = async (req, res) => {
   }
 }
 
-// NEW: Track guest order
+// ##########################################################
+// THIS FUNCTION IS MINIMAL AND STANDARD FOR GUEST ORDER TRACKING
+// ##########################################################
 export const trackGuestOrder = async (req, res) => {
   try {
     const { orderNumber, email } = req.body
@@ -559,8 +588,9 @@ export const trackGuestOrder = async (req, res) => {
   }
 }
 
-// Existing functions remain unchanged
-// In order.controller.js - update the getOrders function
+// ##########################################################
+// FUNCTION ONLY ADMIN AND EXECUTIVE CAN ACCESS ALL ORDERS WITH FILTERS
+// ##########################################################
 export const getOrders = async (req, res) => {
   try {
     const { 
@@ -670,6 +700,11 @@ export const getOrders = async (req, res) => {
   }
 }
 
+
+
+// ##########################################################
+// THIS FUNCTION IS NEW  GET USER ORDER FUNCTION IN TRACKING ORDER OR ORDER DETAILS IN THEIR PROFILE. 
+// ##########################################################
 export const getMyOrders = async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query
@@ -696,6 +731,12 @@ export const getMyOrders = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message })
   }
 }
+
+
+
+// ##########################################################
+// THIS FUNCTION IS PREVIOUS GET ORDER FUNCTION IS ONLY PROVIDE ORDER NUMBER MATCHING ORDER OBJECT ID
+// ##########################################################
 
 // export const getOrder = async (req, res) => {
 //   try {
@@ -730,6 +771,11 @@ export const getMyOrders = async (req, res) => {
 
 // order.controller.js ফাইলের মধ্যে
 
+
+
+// ##########################################################
+// GET ORDER FUNCTION UPDATED TO HANDLE BOTH ORDER NUMBER AND OBJECT ID
+// ##########################################################
 export const getOrder = async (req, res) => {
   try {
     const identifier = req.params.id; // এটি ORD-XXXXX বা 24-char ObjectId হতে পারে
@@ -759,6 +805,10 @@ export const getOrder = async (req, res) => {
 };
 
 
+
+// ##########################################################
+// This is V1 function WHEN I WAS FIRST UPDATING THE ORDER FUNCTION
+// ##########################################################
 
 // export const updateOrder = async (req, res) => {
 //   try {
@@ -851,69 +901,10 @@ const restoreProductStock = async (orderItems) => {
   console.log('✅ Product stock restored for order items.');
 };
 
-// export const updateOrder = async (req, res) => {
-//   try {
-//     const { id } = req.params
-//     const { status, paymentStatus } = req.body
 
-//     const updateData = {}
-//     if (status) updateData.status = status
-//     if (paymentStatus) updateData.paymentStatus = paymentStatus
-
-//     const order = await Order.findByIdAndUpdate(id, updateData, { new: true })
-
-//     if (!order) {
-//       return res.status(404).json({ message: "Order not found" })
-//     }
-
-    
-//     if (status === "shipped" && !order.pathaoOrderId) {
-//       try {
-//         console.log('Creating Pathao order for:', order.orderNumber);
-        
-//         const pathaoRes = await createPathaoOrder(order)
-
-//         order.pathaoTrackingId = pathaoRes.data.consignment_id
-//         order.pathaoOrderId = pathaoRes.data.order_id
-//         order.pathaoStatus = pathaoRes.data.status
-
-//         await order.save()
-//         console.log("Pathao order created successfully:", pathaoRes.data)
-        
-//       } catch (err) {
-//         console.error("❌ Pathao order creation failed:", err.message)
-        
-//         // ✅ FIXED: PATHAO_BASE_URL is now defined
-//         if (PATHAO_BASE_URL.includes('sandbox')) {
-//           console.log('Sandbox environment - creating mock Pathao data');
-          
-//           // Mock data for sandbox testing
-//           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
-//           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
-//           order.pathaoStatus = 'pending';
-//           order.pathaoSandboxMode = true;
-          
-//           await order.save();
-//           console.log('✅ Mock Pathao data created for sandbox testing');
-//         } else {
-//           // Production error handling
-//           order.pathaoError = err.message;
-//           await order.save();
-//         }
-//       }
-//     }
-
-//     res.status(200).json({
-//       status: "success",
-//       message: "Order updated successfully",
-//       data: { order },
-//     })
-//   } catch (error) {
-//     console.error("Update order error:", error)
-//     res.status(500).json({ message: "Internal server error", error: error.message })
-//   }
-// }
-
+// ##########################################################
+// updated this function for comprehensive order updates
+// ##########################################################
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params
@@ -996,6 +987,399 @@ const shouldRestoreStock =
 }
 
 
+
+// ##########################################################
+// added this function for comprehensive order updates
+// ##########################################################
+export const updateOrderComprehensive = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      status,
+      paymentStatus,
+      items, // Updated items array
+      shippingAddress,
+      billingAddress,
+      customerInfo, // For guest orders
+      couponCode,
+      couponDiscount,
+      shippingCost,
+      specialInstructions,
+      adminNote // New admin note
+    } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const previousStatus = order.status;
+    const updateData = {};
+    const changes = [];
+
+    // ✅ Status update with stock management
+    if (status && status !== order.status) {
+      updateData.status = status;
+      changes.push(`Status changed from ${order.status} to ${status}`);
+
+      // Stock restoration logic
+      const shouldRestoreStock =
+        (status === "cancelled" || status === "refunded" || status === "returned") &&
+        previousStatus !== "cancelled" &&
+        previousStatus !== "refunded" &&
+        previousStatus !== "returned";
+
+      if (shouldRestoreStock) {
+        await restoreProductStock(order.items);
+        changes.push("Product stock restored due to cancellation/refund");
+      }
+
+      // Pathao integration (existing logic)
+      if (status === "shipped" && !order.pathaoOrderId) {
+        try {
+          console.log('Creating Pathao order for:', order.orderNumber);
+          const pathaoRes = await createPathaoOrder(order);
+          order.pathaoTrackingId = pathaoRes.data.consignment_id;
+          order.pathaoOrderId = pathaoRes.data.order_id;
+          order.pathaoStatus = pathaoRes.data.status;
+          changes.push("Pathao order created");
+        } catch (err) {
+          console.error("❌ Pathao order creation failed:", err.message);
+          if (PATHAO_BASE_URL.includes('sandbox')) {
+            order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
+            order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
+            order.pathaoStatus = 'pending';
+            order.pathaoSandboxMode = true;
+            changes.push("Mock Pathao data created (Sandbox)");
+          }
+        }
+      }
+    }
+
+    // ✅ Payment status update
+    if (paymentStatus && paymentStatus !== order.paymentStatus) {
+      updateData.paymentStatus = paymentStatus;
+      changes.push(`Payment status changed from ${order.paymentStatus} to ${paymentStatus}`);
+    }
+
+    // ✅ Items update with stock management
+    if (items && Array.isArray(items)) {
+      // Restore original stock first
+      await restoreProductStock(order.items);
+      
+      // Update with new items
+      await updateProductStock(items);
+      
+      updateData.items = items;
+      
+      // Recalculate order totals
+      const recalculated = recalculateOrderTotals(items, shippingCost || order.shippingCost);
+      Object.assign(updateData, recalculated);
+      
+      changes.push("Order items updated and totals recalculated");
+    }
+
+    // ✅ Shipping address update
+    if (shippingAddress) {
+      updateData.shippingAddress = { ...order.shippingAddress, ...shippingAddress };
+      changes.push("Shipping address updated");
+    }
+
+    // ✅ Billing address update
+    if (billingAddress) {
+      updateData.billingAddress = { ...order.billingAddress, ...billingAddress };
+      changes.push("Billing address updated");
+    }
+
+    // ✅ Guest customer info update
+    if (order.isGuestOrder && customerInfo) {
+      updateData.guestCustomerInfo = { ...order.guestCustomerInfo, ...customerInfo };
+      changes.push("Customer information updated");
+    }
+
+    // ✅ Coupon and discount updates
+    if (couponCode !== undefined) {
+      updateData.couponCode = couponCode;
+      changes.push(`Coupon code ${couponCode ? 'applied' : 'removed'}`);
+    }
+    if (couponDiscount !== undefined) {
+      updateData.couponDiscount = couponDiscount;
+      changes.push(`Coupon discount set to ${couponDiscount}`);
+    }
+
+    // ✅ Shipping cost update
+    if (shippingCost !== undefined) {
+      updateData.shippingCost = shippingCost;
+      updateData.totalAmount = (updateData.subtotal || order.subtotal) + shippingCost;
+      changes.push(`Shipping cost updated to ${shippingCost}`);
+    }
+
+    // ✅ Special instructions update
+    if (specialInstructions !== undefined) {
+      updateData.specialInstructions = specialInstructions;
+      changes.push("Special instructions updated");
+    }
+
+    // ✅ Add admin note if provided
+    if (adminNote) {
+      if (!updateData.adminNotes) {
+        updateData.adminNotes = [...order.adminNotes];
+      }
+      updateData.adminNotes.push({
+        note: adminNote,
+        addedBy: req.user.id,
+        addedAt: new Date(),
+        role: req.user.role
+      });
+      changes.push("Admin note added");
+    }
+
+    // Update the order
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate("userId", "name email");
+
+    res.status(200).json({
+      status: "success",
+      message: "Order updated successfully",
+      data: { 
+        order: updatedOrder,
+        changes 
+      },
+    });
+  } catch (error) {
+    console.error("Comprehensive order update error:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
+  }
+};
+
+
+// ##########################################################
+// added this function for recalculating order totals
+// ##########################################################
+const recalculateOrderTotals = (items, shippingCost = 0) => {
+  let subtotal = 0;
+  let totalDiscount = 0;
+
+  items.forEach(item => {
+    const totalOriginalPrice = item.originalPrice * item.quantity;
+    const totalDiscountedPrice = item.discountedPrice * item.quantity;
+    const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+    subtotal += totalDiscountedPrice;
+    totalDiscount += Math.max(0, itemDiscountAmount);
+  });
+
+  const totalAmount = subtotal + shippingCost;
+
+  return {
+    subtotal,
+    totalDiscount,
+    shippingCost,
+    totalAmount
+  };
+};
+
+
+// ##########################################################
+// added this function for added oder from manualy by admin and executive
+// ##########################################################
+export const createManualOrder = async (req, res) => {
+  try {
+    const {
+      customerType, // "user" or "guest"
+      userId, // for registered users
+      guestCustomerInfo, // for guest orders
+      items,
+      shippingAddress,
+      billingAddress,
+      paymentMethod,
+      shippingCost = 0,
+      couponCode,
+      couponDiscount = 0,
+      specialInstructions = "",
+      adminNote
+    } = req.body;
+
+    // Validate required fields
+    if (!customerType || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Customer type and valid items are required" });
+    }
+
+    if (!shippingAddress || !shippingAddress.address || !shippingAddress.city) {
+      return res.status(400).json({ message: "Valid shipping address is required" });
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Payment method is required" });
+    }
+
+    // Validate guest customer info
+    if (customerType === "guest") {
+      if (!guestCustomerInfo || !guestCustomerInfo.name || !guestCustomerInfo.email || !guestCustomerInfo.phone) {
+        return res.status(400).json({ 
+          message: "Guest customer name, email, and phone are required" 
+        });
+      }
+    }
+
+    // Validate user order
+    if (customerType === "user" && !userId) {
+      return res.status(400).json({ message: "User ID is required for registered users" });
+    }
+
+    // Prepare order items with product validation
+    const orderItems = [];
+    let calculatedSubtotal = 0;
+    let calculatedTotalDiscount = 0;
+
+    for (const item of items) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(400).json({ message: `Product not found: ${item.productId}` });
+      }
+
+      // Validate stock
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ 
+          message: `Insufficient stock for product: ${product.title}. Available: ${product.stock}, Requested: ${item.quantity}` 
+        });
+      }
+
+      // Calculate prices
+      const originalPrice = item.originalPrice || product.basePrice;
+      const discountedPrice = item.discountedPrice || originalPrice;
+      const totalOriginalPrice = originalPrice * item.quantity;
+      const totalDiscountedPrice = discountedPrice * item.quantity;
+      const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+      const orderItem = {
+        productId: product._id,
+        productTitle: item.productTitle || product.title,
+        productImage: item.productImage || product.images[0]?.url || "/placeholder.svg?height=200&width=200",
+        variantId: item.variantId || null,
+        variantDetails: item.variantDetails || null,
+        colorVariantId: item.colorVariantId || null,
+        colorVariantDetails: item.colorVariantDetails || null,
+        quantity: item.quantity,
+        originalPrice,
+        discountedPrice,
+        discountPercentage: item.discountPercentage || 0,
+        totalOriginalPrice,
+        totalDiscountedPrice,
+        discountAmount: Math.max(0, itemDiscountAmount),
+      };
+
+      orderItems.push(orderItem);
+      calculatedSubtotal += totalDiscountedPrice;
+      calculatedTotalDiscount += itemDiscountAmount;
+    }
+
+    // Calculate shipping cost
+    const finalShippingCost = shippingCost === 0 ? 
+      calculateShippingCost(calculatedSubtotal, shippingAddress.city) : 
+      shippingCost;
+
+    const totalAmount = calculatedSubtotal + finalShippingCost - couponDiscount;
+
+    // Generate order number
+    const orderNumber = generateOrderNumber(customerType === "guest");
+
+    // Prepare order data
+    const orderData = {
+      isGuestOrder: customerType === "guest",
+      orderNumber,
+      items: orderItems,
+      subtotal: calculatedSubtotal,
+      totalDiscount: Math.max(0, calculatedTotalDiscount),
+      couponCode: couponCode || null,
+      couponDiscount: couponDiscount || 0,
+      shippingCost: finalShippingCost,
+      totalAmount,
+      shippingAddress,
+      paymentMethod,
+      specialInstructions,
+      status: "confirmed",
+      paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
+      createdBy: req.user.id, // Track who created the order
+      createdByRole: req.user.role
+    };
+
+    // Add user/guest specific data
+    if (customerType === "user") {
+      orderData.userId = userId;
+    } else {
+      orderData.guestCustomerInfo = guestCustomerInfo;
+      orderData.billingAddress = billingAddress?.sameAsShipping !== false ? 
+        { ...shippingAddress, sameAsShipping: true } : 
+        { ...billingAddress, sameAsShipping: false };
+    }
+
+    // Add admin note if provided
+    if (adminNote) {
+      orderData.adminNotes = [{
+        note: `Order created manually: ${adminNote}`,
+        addedBy: req.user.id,
+        addedAt: new Date(),
+        role: req.user.role
+      }];
+    }
+
+    // Create order
+    const order = new Order(orderData);
+    await order.save();
+
+    // Update product stock
+    await updateProductStock(orderItems);
+
+    // Socket notification
+    try {
+      const io = getIo();
+      const customerName = customerType === "user" ? 
+        (shippingAddress.fullName || 'a Customer') : 
+        (guestCustomerInfo.name || 'a Guest Customer');
+      
+      const notificationMessage = `New Manual Order #${order.orderNumber} created by ${req.user.name} for ${customerName}`;
+      
+      const notificationData = {
+        message: notificationMessage,
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString(),
+        link: `/orders/${order._id}`,
+        createdBy: req.user.name
+      };
+      
+      io.emit('newOrderNotification', notificationData);
+      console.log(`[Socket.IO] Emitted manual order notification for: ${order.orderNumber}`);
+    } catch (socketError) {
+      console.error('[Socket.IO] Error emitting notification:', socketError.message);
+    }
+
+    res.status(201).json({
+      status: "success",
+      message: "Manual order created successfully",
+      data: { order },
+    });
+
+  } catch (error) {
+    console.error("Create manual order error:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
+};
+
+// ##########################################################
+//  This is older version of cancel order function. Currently not using but have to keep for references in future. 
+// ##########################################################
 // export const cancelOrder = async (req, res) => {
 //   try {
 //     const { id } = req.params
@@ -1352,6 +1736,36 @@ export const getOrderStatusData = async (req, res) => {
     });
   }
 };
+
+// ##########################################################
+// added this function only for order deletation from admin user. 
+export const deleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Restore product stock before deleting order
+    await restoreProductStock(order.items);
+
+    await Order.findByIdAndDelete(id);
+
+    res.status(200).json({
+      status: "success",
+      message: "Order deleted successfully and stock restored",
+    });
+  } catch (error) {
+    console.error("Delete order error:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
+  }
+};
+
 
 // Legacy functions for backward compatibility
 export const getUserOrders = getMyOrders

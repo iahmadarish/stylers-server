@@ -11,7 +11,10 @@ import {
   trackGuestOrder,
   getDashboardStats,
   getSalesData,
-  getOrderStatusData
+  getOrderStatusData,
+   deleteOrder,
+  updateOrderComprehensive,
+  createManualOrder
 } from "../controllers/order.controller.js"
 
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
@@ -111,7 +114,14 @@ router.get('/top-products-simple', restrictTo("admin", "executive"), async (req,
 
 // Admin routes
 router.use(restrictTo("admin", "executive"))
+
+router.post("/manual", createManualOrder);
+// Comprehensive order editing
+router.patch("/:id/comprehensive", updateOrderComprehensive);
+
+
 router.get("/", getOrders)
 router.patch("/:id", updateOrder)
+router.delete("/:id", restrictTo("admin"), deleteOrder)
 
 export default router

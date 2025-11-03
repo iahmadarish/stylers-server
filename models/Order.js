@@ -110,6 +110,28 @@ const orderSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
+    adminNotes: [
+      {
+        note: {
+          type: String,
+          required: true,
+        },
+        addedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        role: {
+          type: String,
+          enum: ["admin", "executive"],
+          required: true,
+        }
+      }
+    ],
     transactionId: {
       type: String,
       unique: true,

@@ -285,6 +285,20 @@ export const initializeGuestPayment = async (req, res) => {
   }
 }
 
+
+const generateOrderNumber = (serialNum) => {
+  const now = new Date();
+  
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const HHMM = `${hours}${minutes}`;
+  const serialPart = serialNum.toString().padStart(4, '0'); 
+  return `${year}${month}${day}${HHMM}${serialPart}`;
+};
+
 // Cash on Delivery order
 export const createCODOrder = async (req, res) => {
   try {
@@ -405,9 +419,14 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       finalTotal,
     })
 
-    // Generate order number manually
+
     const orderCount = await Order.countDocuments()
-    const orderNumber = `ORD-${Date.now()}-${(orderCount + 1).toString().padStart(4, "0")}`
+  
+
+  const serialNumber = orderCount + 1
+  const orderNumber = generateOrderNumber(serialNumber) 
+  console.log(`Generated New Order Number: ${orderNumber}`)
+
 
     // Format shipping address properly
     const formattedShippingAddress = {
@@ -438,6 +457,7 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       specialInstructions: specialInstructions || "",
       status: "pending", // confirmed was changed with pending as per client request
       paymentStatus: "pending",
+      isGuestOrder: false,
     }
 
     console.log("Creating order with data:", JSON.stringify(orderData, null, 2))

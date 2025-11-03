@@ -11,18 +11,23 @@ import { getIo } from "../utils/socket.js"
 // ##########################################################
 // GENERATING ORDER NUMBER BY FOLLWING CLIENT REQUIREMENTS BY DATE MONTH YEAR TIME FRAMME. 
 // ##########################################################
-const generateOrderNumber = (isGuest = false) => {
+// order.controller.js (or utils file)
+
+const generateOrderNumber = (serialNum) => {
   const now = new Date();
+  
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
-  const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  const HHMM = `${hours}${minutes}`;
   
-  const prefix = isGuest ? 'GST' : 'ORD';
-  
-  return `${prefix}${year}${month}${day}${hours}${minutes}${randomNum}`;
+  // 🌟 CHANGE: Use the provided serial number instead of Math.random()
+  const serialPart = serialNum.toString().padStart(4, '0'); 
+
+  // Format: [YYYY][MM][DD][HHMM][XXXX]
+  return `${year}${month}${day}${HHMM}${serialPart}`;
 };
 
 
@@ -99,7 +104,11 @@ export const createOrder = async (req, res) => {
     const totalAmount = subtotal + shippingCost;
 
     // Generate order number
-    const orderNumber = generateOrderNumber(false);
+    const orderCount = await Order.countDocuments()
+    const serialNumber = orderCount + 1
+
+    const orderNumber = generateOrderNumber(serialNumber) 
+  console.log(`Generated New Order Number: ${orderNumber}`)
 
     // Create order
     const order = new Order({
@@ -363,9 +372,10 @@ export const createGuestOrder = async (req, res) => {
       shippingCost: dynamicShippingCost,
       totalAmount: calculatedTotalAmount
     });
-
-    // Generate unique order number for guest
-    const orderNumber = generateOrderNumber(true);
+    const orderCount = await Order.countDocuments();
+    const serialNumber = orderCount + 1; 
+    const orderNumber = generateOrderNumber(serialNumber);
+    console.log(`Generated Guest Order Number: ${orderNumber}`);
 
 
     // Prepare billing address - handle both cases
@@ -1288,7 +1298,14 @@ export const createManualOrder = async (req, res) => {
     const totalAmount = calculatedSubtotal + finalShippingCost - couponDiscount;
 
     // Generate order number
-    const orderNumber = generateOrderNumber(customerType === "guest");
+    // const orderNumber = generateOrderNumber(customerType === "guest");
+
+
+    const orderCount = await Order.countDocuments();
+    const serialNumber = orderCount + 1; 
+    const orderNumber = generateOrderNumber(serialNumber);
+    console.log(`Generated Manual Order Number: ${orderNumber}`);
+
 
     // Prepare order data
     const orderData = {

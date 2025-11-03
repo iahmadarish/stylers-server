@@ -505,28 +505,57 @@ try {
 // FUNCTION FOR UPDATE PRODUCT STOCK AFTER ORDER PLACED BY USER AND GUEST BOTH. 
 // ##########################################################
 const updateProductStock = async (orderItems) => {
+  console.log('Updating product stock for items:', JSON.stringify(orderItems, null, 2));
+  
   for (const item of orderItems) {
-    const product = await Product.findById(item.productId)
-    if (!product) continue
-
-    if (item.variantId) {
-      const variant = product.variants.id(item.variantId)
-      if (variant) {
-        variant.stock = Math.max(0, variant.stock - item.quantity)
+    try {
+      console.log(`Processing item: ${item.productTitle || 'Unknown Product'}`);
+      console.log(`Product ID: ${item.productId}`);
+      console.log(`Quantity: ${item.quantity}`);
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        console.log(`Product not found: ${item.productId}`);
+        continue;
       }
-    }
-
-    if (item.colorVariantId) {
-      const colorVariant = product.colorVariants.id(item.colorVariantId)
-      if (colorVariant) {
-        colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity)
+      console.log(`Product found: ${product.title}`);
+      // Update variant stock if variantId exists
+      if (item.variantId) {
+        const variant = product.variants.id(item.variantId);
+        if (variant) {
+          console.log(`Updating variant stock: ${variant.colorName} - ${variant.size}`);
+          variant.stock = Math.max(0, variant.stock - item.quantity);
+          console.log(`Variant stock updated: ${variant.stock}`);
+        } else {
+          console.log(`Variant not found: ${item.variantId}`);
+        }
       }
-    }
+      // Update color variant stock if colorVariantId exists
+      if (item.colorVariantId) {
+        const colorVariant = product.colorVariants.id(item.colorVariantId);
+        if (colorVariant) {
+          console.log(`Updating color variant stock: ${colorVariant.colorName}`);
+          colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity);
+          console.log(`Color variant stock updated: ${colorVariant.stock}`);
+        } else {
+          console.log(`Color variant not found: ${item.colorVariantId}`);
+        }
+      }
 
-    product.stock = Math.max(0, product.stock - item.quantity)
-    await product.save()
+      // Update main product stock
+      console.log(`Updating main product stock: ${product.stock} - ${item.quantity}`);
+      product.stock = Math.max(0, product.stock - item.quantity);
+      console.log(`Main product stock updated: ${product.stock}`);
+
+      await product.save();
+      console.log(`Product saved successfully: ${product.title}`);
+
+    } catch (error) {
+      console.error(`Error updating stock for product ${item.productId}:`, error);
+    }
   }
-}
+  
+  console.log('Product stock update completed');
+};
 
 // ##########################################################
 // GUEST ORDER FUNCTION FOR GET ORDER DETAILS IN TRACKING PAGE

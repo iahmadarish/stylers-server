@@ -913,32 +913,112 @@ export const getOrder = async (req, res) => {
 // }
 
 
+
+
+// ##########################################################
+// Restore product stock function verision one /old
+// ##########################################################
+
+
+// const restoreProductStock = async (orderItems) => {
+//   for (const item of orderItems) {
+//     const product = await Product.findById(item.productId);
+//     if (!product) continue;
+
+//     const quantity = item.quantity;
+
+//     if (item.variantId) {
+//       const variant = product.variants.id(item.variantId);
+//       if (variant) {
+//         variant.stock = variant.stock + quantity; // Restore stock
+//       }
+//     }
+
+//     if (item.colorVariantId) {
+//       const colorVariant = product.colorVariants.id(item.colorVariantId);
+//       if (colorVariant) {
+//         colorVariant.stock = colorVariant.stock + quantity; // Restore stock
+//       }
+//     }
+
+//     product.stock = product.stock + quantity; // Restore main product stock
+//     await product.save();
+//   }
+//   console.log('✅ Product stock restored for order items.');
+// };
+
+
+
+// ##########################################################
+// restore products stcock function updated with manual order logical
+// ##########################################################
 const restoreProductStock = async (orderItems) => {
+  console.log('🔄 Restoring product stock for items:', JSON.stringify(orderItems, null, 2));
+  
   for (const item of orderItems) {
-    const product = await Product.findById(item.productId);
-    if (!product) continue;
-
-    const quantity = item.quantity;
-
-    if (item.variantId) {
-      const variant = product.variants.id(item.variantId);
-      if (variant) {
-        variant.stock = variant.stock + quantity; // Restore stock
+    try {
+      console.log(`📦 Processing item for stock restoration:`, {
+        productId: item.productId,
+        productTitle: item.productTitle,
+        quantity: item.quantity,
+        variantId: item.variantId
+      });
+      
+      // ✅ FIX: Check if productId exists
+      if (!item.productId) {
+        console.log('❌ Item missing productId, skipping:', item);
+        continue;
       }
-    }
 
-    if (item.colorVariantId) {
-      const colorVariant = product.colorVariants.id(item.colorVariantId);
-      if (colorVariant) {
-        colorVariant.stock = colorVariant.stock + quantity; // Restore stock
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        console.log(`❌ Product not found: ${item.productId}`);
+        continue;
       }
-    }
 
-    product.stock = product.stock + quantity; // Restore main product stock
-    await product.save();
+      console.log(`✅ Product found for restoration: ${product.title}`);
+
+      const quantity = item.quantity;
+
+      // Restore variant stock if variantId exists
+      if (item.variantId && product.variants && product.variants.length > 0) {
+        const variant = product.variants.id(item.variantId);
+        if (variant) {
+          console.log(`🔄 Restoring variant stock: ${variant.colorName} - ${variant.size}`);
+          variant.stock = variant.stock + quantity;
+          console.log(`✅ Variant stock restored to: ${variant.stock}`);
+        } else {
+          console.log(`❌ Variant not found for restoration: ${item.variantId}`);
+        }
+      }
+
+      // Restore color variant stock if colorVariantId exists
+      if (item.colorVariantId && product.colorVariants && product.colorVariants.length > 0) {
+        const colorVariant = product.colorVariants.id(item.colorVariantId);
+        if (colorVariant) {
+          console.log(`🔄 Restoring color variant stock: ${colorVariant.colorName}`);
+          colorVariant.stock = colorVariant.stock + quantity;
+          console.log(`✅ Color variant stock restored to: ${colorVariant.stock}`);
+        } else {
+          console.log(`❌ Color variant not found for restoration: ${item.colorVariantId}`);
+        }
+      }
+
+      // Restore main product stock
+      console.log(`🔄 Restoring main product stock: ${product.stock} + ${quantity}`);
+      product.stock = product.stock + quantity;
+      console.log(`✅ Main product stock restored to: ${product.stock}`);
+
+      await product.save();
+      console.log(`💾 Product stock restoration saved: ${product.title}`);
+
+    } catch (error) {
+      console.error(`❌ Error restoring stock for product ${item.productId}:`, error);
+    }
   }
-  console.log('✅ Product stock restored for order items.');
+  console.log('✅ Product stock restoration completed');
 };
+
 
 
 // ##########################################################

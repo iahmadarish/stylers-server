@@ -678,21 +678,81 @@ export const resetPassword = catchAsync(async (req, res, next) => {
 // @route   PATCH /api/auth/update-password
 // @access  Private
 export const updatePassword = catchAsync(async (req, res, next) => {
-  // Get user from collection
-  const user = await User.findById(req.user.id).select("+password")
+  try {
+    console.log("🔄 Update password request received");
+    console.log("User ID:", req.user.id);
+    console.log("Request body:", { 
+      hasCurrentPassword: !!req.body.currentPassword,
+      hasNewPassword: !!req.body.newPassword 
+    });
 
-  // Check current password
-  if (!(await user.comparePassword(req.body.currentPassword))) {
-    return next(new AppError("Your current password is incorrect", 401))
+    // Validate request body
+    if (!req.body.currentPassword || !req.body.newPassword) {
+      console.log("❌ Missing required fields");
+      return next(new AppError("Current password and new password are required", 400));
+    }
+
+    // Get user from collection
+    const user = await User.findById(req.user.id).select("+password");
+    
+    if (!user) {
+      console.log("❌ User not found for ID:", req.user.id);
+      return next(new AppError("User not found", 404));
+    }
+
+    console.log("🔐 Checking current password...");
+    
+    // Check current password
+    const isCurrentPasswordCorrect = await user.comparePassword(req.body.currentPassword);
+    
+    if (!isCurrentPasswordCorrect) {
+      console.log("❌ Current password is incorrect");
+      return res.status(401).json({
+        status: "error",
+        message: "Your current password is incorrect",
+        code: "INCORRECT_CURRENT_PASSWORD"
+      });
+    }
+
+    console.log("✅ Current password verified");
+
+    // Check if new password is same as current
+    const isSamePassword = await user.comparePassword(req.body.newPassword);
+    if (isSamePassword) {
+      console.log("❌ New password cannot be same as current password");
+      return res.status(400).json({
+        status: "error",
+        message: "New password must be different from current password",
+        code: "SAME_PASSWORD"
+      });
+    }
+
+    console.log("🔄 Updating to new password...");
+    
+    // Update password
+    user.password = req.body.newPassword;
+    await user.save();
+
+    console.log("✅ Password updated successfully");
+
+    // Send success response
+    res.status(200).json({
+      status: "success",
+      message: "Password updated successfully",
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("💥 Error in updatePassword:", error);
+    return next(new AppError("Error updating password", 500));
   }
-
-  // Update password
-  user.password = req.body.newPassword
-  await user.save()
-
-  // Send token
-  sendTokenResponse(user, 200, res)
-})
+});
 
 // @desc    Google OAuth login/register
 // @route   POST /api/auth/google

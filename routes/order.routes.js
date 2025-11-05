@@ -14,7 +14,9 @@ import {
   getOrderStatusData,
    deleteOrder,
   updateOrderComprehensive,
-  createManualOrder
+  createManualOrder,
+  getTopSoldProducts, 
+  getCampaignSalesStats
 } from "../controllers/order.controller.js"
 
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
@@ -110,7 +112,10 @@ router.get('/top-products-simple', restrictTo("admin", "executive"), async (req,
   }
 });
 
+router.get("/stats/top-products", protect, restrictTo("admin", "executive"), getTopSoldProducts);
 
+// ড্যাশবোর্ডের ক্যাম্পেইন সেলস Stats
+router.get("/stats/campaign", protect, restrictTo("admin", "executive"), getCampaignSalesStats);
 
 // Admin routes
 router.use(restrictTo("admin", "executive"))

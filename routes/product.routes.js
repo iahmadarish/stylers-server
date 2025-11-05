@@ -190,7 +190,8 @@ import {
   getProductImages,
   getProductSpecifications,
   getProductPricing,
-  getAllProductsForAdmin
+  getAllProductsForAdmin,
+getProductStats
 } from "../controllers/product.controller.js"
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
 import { productUpload } from "../utils/cloudinary.js"
@@ -258,7 +259,7 @@ router.get("/:slug/reviews", getProductReviews)
 
 
 router.get("/admin-list", protect, restrictTo("admin", "executive"), getAllProductsForAdmin)
-
+router.get("/stats", protect, restrictTo("admin", "executive"), getProductStats);
 
 router.post("/", protect, restrictTo("admin", "executive"), productUpload.array("images", 50), createProduct)
 

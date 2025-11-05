@@ -9,6 +9,7 @@ import { emitOrderNotification } from "../utils/orderNotification.js";
 const store_id = process.env.SSLCOMMERZ_STORE_ID
 const store_passwd = process.env.SSLCOMMERZ_STORE_PASSWORD
 const is_live = false // true for live, false for sandbox
+import Coupon from "../models/Coupon.js";
 
 // Helper function to calculate shipping cost
 function calculateShippingCost(subtotal, city) {
@@ -91,6 +92,10 @@ export const initializeGuestPayment = async (req, res) => {
     console.log("=== Initialize Guest Payment Request ===")
     console.log("Request body:", JSON.stringify(req.body, null, 2))
     const { guestOrderData, customerInfo, paymentMethod = "card" } = req.body
+
+    const couponCode = guestOrderData?.couponCode || null;
+    const couponDiscount = guestOrderData?.couponDiscount || 0;
+
     // Detailed validation
     if (!guestOrderData) {
       return res.status(400).json({
@@ -146,54 +151,55 @@ export const initializeGuestPayment = async (req, res) => {
         0,
       )
     const shippingCost = calculateShippingCost(subtotal, guestOrderData.shippingAddress.city)
-    const finalTotal = subtotal + shippingCost
+    const finalTotal = Math.max(subtotal + shippingCost - couponDiscount, 0)
 
     // Generate unique transaction ID for guest
     const tran_id = `GUEST_TXN_${Date.now()}_${Math.floor(Math.random() * 10000)}`
 
     // Prepare complete guest order data for storage
     const completeGuestOrderData = {
-    items: guestOrderData.items.map((item) => {
-      const colorVariantId = item.colorVariantId ? item.colorVariantId : null;
+      items: guestOrderData.items.map((item) => {
+        const colorVariantId = item.colorVariantId ? item.colorVariantId : null;
 
-      return {
-        productId: item.productId,
-        productTitle: item.productTitle || "Unknown Product",
-        productImage: item.productImage || "/placeholder.svg",
-        variantId: item.variantId || null,
-        colorVariantId: colorVariantId,
-        quantity: item.quantity || 1,
-        originalPrice: item.originalPrice || 0,
-        discountedPrice: item.discountedPrice || item.originalPrice || 0,
-        discountPercentage: item.discountPercentage || 0,
-        totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
-        totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
-        discountAmount:
-          ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1),
-      };
-    }),
-    subtotal: subtotal,
-    totalDiscount: guestOrderData.totalDiscount || 0,
-    shippingCost: shippingCost,
-    totalAmount: finalTotal,
-    shippingAddress: {
-      fullName: guestOrderData.shippingAddress.fullName || customerInfo.name,
-      phone: guestOrderData.shippingAddress.phone || customerInfo.phone,
-      email: guestOrderData.shippingAddress.email || customerInfo.email,
-      address: guestOrderData.shippingAddress.address,
-      city: guestOrderData.shippingAddress.city,
-      state: guestOrderData.shippingAddress.state || "",
-      zipCode: guestOrderData.shippingAddress.zipCode || guestOrderData.shippingAddress.postalCode || "",
-      country: guestOrderData.shippingAddress.country || "Bangladesh",
-    },
-    billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
-    customerInfo: customerInfo,
-    couponCode: guestOrderData.couponCode || null,
-    specialInstructions: guestOrderData.specialInstructions || "",
-    transactionId: tran_id,
-    paymentStatus: "pending",
-    paymentMethod: paymentMethod,
-  };
+        return {
+          productId: item.productId,
+          productTitle: item.productTitle || "Unknown Product",
+          productImage: item.productImage || "/placeholder.svg",
+          variantId: item.variantId || null,
+          colorVariantId: colorVariantId,
+          quantity: item.quantity || 1,
+          originalPrice: item.originalPrice || 0,
+          discountedPrice: item.discountedPrice || item.originalPrice || 0,
+          discountPercentage: item.discountPercentage || 0,
+          totalOriginalPrice: (item.originalPrice || 0) * (item.quantity || 1),
+          totalDiscountedPrice: (item.discountedPrice || item.originalPrice || 0) * (item.quantity || 1),
+          discountAmount:
+            ((item.originalPrice || 0) - (item.discountedPrice || item.originalPrice || 0)) * (item.quantity || 1),
+        };
+      }),
+      subtotal: subtotal,
+      totalDiscount: guestOrderData.totalDiscount || 0,
+      shippingCost: shippingCost,
+      totalAmount: finalTotal,
+      shippingAddress: {
+        fullName: guestOrderData.shippingAddress.fullName || customerInfo.name,
+        phone: guestOrderData.shippingAddress.phone || customerInfo.phone,
+        email: guestOrderData.shippingAddress.email || customerInfo.email,
+        address: guestOrderData.shippingAddress.address,
+        city: guestOrderData.shippingAddress.city,
+        state: guestOrderData.shippingAddress.state || "",
+        zipCode: guestOrderData.shippingAddress.zipCode || guestOrderData.shippingAddress.postalCode || "",
+        country: guestOrderData.shippingAddress.country || "Bangladesh",
+      },
+      billingAddress: guestOrderData.billingAddress || { sameAsShipping: true },
+      customerInfo: customerInfo,
+      couponCode: couponCode,
+      couponDiscount: couponDiscount,
+      specialInstructions: guestOrderData.specialInstructions || "",
+      transactionId: tran_id,
+      paymentStatus: "pending",
+      paymentMethod: paymentMethod,
+    };
 
     // Aamarpay payment data preparation
     const store_id = process.env.AMARPAY_STORE_ID
@@ -288,14 +294,14 @@ export const initializeGuestPayment = async (req, res) => {
 
 const generateOrderNumber = (serialNum) => {
   const now = new Date();
-  
+
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const HHMM = `${hours}${minutes}`;
-  const serialPart = serialNum.toString().padStart(4, '0'); 
+  const serialPart = serialNum.toString().padStart(4, '0');
   return `${year}${month}${day}${HHMM}${serialPart}`;
 };
 
@@ -305,7 +311,13 @@ export const createCODOrder = async (req, res) => {
     console.log("=== COD Order Request ===")
     console.log("Request body:", JSON.stringify(req.body, null, 2))
 
-    const { userId, shippingAddress, couponCode = null, specialInstructions = "" } = req.body
+    const {
+      userId,
+      shippingAddress,
+      couponCode = null,
+      couponDiscount = 0,
+      specialInstructions = ""
+    } = req.body
 
     // Basic validation
     if (!userId) {
@@ -353,7 +365,7 @@ export const createCODOrder = async (req, res) => {
 
     console.log("Cart found with", cart.items.length, "items")
 
-    // Simple order items creation with better error handling
+    // ✅ CHANGE 1: প্রথমে order items তৈরি করুন এবং subtotal calculate করুন
     const orderItems = []
     let subtotal = 0
 
@@ -365,8 +377,7 @@ export const createCODOrder = async (req, res) => {
         continue
       }
 
-      // Use cart item prices directly with fallbacks
-const originalPrice = cartItem.originalPrice || product.basePrice || product.price || 0
+      const originalPrice = cartItem.originalPrice || product.basePrice || product.price || 0
       const discountedPrice = cartItem.discountedPrice || originalPrice
       const quantity = cartItem.quantity || 1
 
@@ -408,25 +419,61 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       })
     }
 
-    // Calculate shipping cost based on location and amount
-    const shippingCost = calculateShippingCost(subtotal, shippingAddress.city)
-    const finalTotal = subtotal + shippingCost // No tax
+    console.log("📊 Calculated subtotal:", subtotal)
 
-    console.log("Order calculation:", {
+    // ✅ CHANGE 2: এখন কুপন ভ্যালিডেশন করুন (subtotal available হওয়ার পর)
+    let finalCouponDiscount = 0;
+    let validatedCoupon = null;
+
+    if (couponCode && couponDiscount > 0) {
+      try {
+        console.log("🔍 Validating coupon:", couponCode);
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true
+        });
+
+        if (coupon) {
+          console.log("✅ Coupon found:", coupon.code);
+
+          // কুপন ভ্যালিডেশন চেক
+          if (!coupon.canUse) {
+            console.log("❌ Coupon cannot be used (expired/inactive)");
+          } else if (!coupon.canUserUse(userId)) {
+            console.log("❌ User cannot use this coupon (limit reached)");
+          } else if (coupon.minOrderAmount && subtotal < coupon.minOrderAmount) {
+            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${subtotal}`);
+          } else {
+            validatedCoupon = coupon;
+            finalCouponDiscount = couponDiscount;
+            console.log("🎉 Coupon validated successfully. Discount:", finalCouponDiscount);
+          }
+        } else {
+          console.log("❌ Coupon not found in database");
+        }
+      } catch (couponError) {
+        console.error("❌ Coupon validation error:", couponError);
+      }
+    } else {
+      console.log("ℹ️ No coupon code or discount provided");
+    }
+
+    // ✅ CHANGE 3: Calculate totals WITH COUPON
+    const shippingCost = calculateShippingCost(subtotal, shippingAddress.city)
+    const finalTotal = Math.max(subtotal + shippingCost - finalCouponDiscount, 0)
+
+    console.log("💰 Final Order Calculation:", {
       subtotal,
       shippingCost,
+      couponDiscount: finalCouponDiscount,
       city: shippingAddress.city,
       finalTotal,
     })
 
-
     const orderCount = await Order.countDocuments()
-  
-
-  const serialNumber = orderCount + 1
-  const orderNumber = generateOrderNumber(serialNumber) 
-  console.log(`Generated New Order Number: ${orderNumber}`)
-
+    const serialNumber = orderCount + 1
+    const orderNumber = generateOrderNumber(serialNumber)
+    console.log(`Generated New Order Number: ${orderNumber}`)
 
     // Format shipping address properly
     const formattedShippingAddress = {
@@ -434,13 +481,13 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       phone: shippingAddress.phone || "",
       email: shippingAddress.email || "",
       address: shippingAddress.address || "",
-      city: shippingAddress.city || "", // changed to employ 
-      state: shippingAddress.state || "", // changed to employ 
+      city: shippingAddress.city || "",
+      state: shippingAddress.state || "",
       zipCode: shippingAddress.zipCode || "",
       country: shippingAddress.country || "Bangladesh",
     }
 
-    // Create order
+    // ✅ CHANGE 4: Create order with coupon data
     const orderData = {
       userId,
       orderNumber: orderNumber,
@@ -448,25 +495,43 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       subtotal,
       totalDiscount: 0,
       shippingCost,
-      tax: 0, // No tax
+      tax: 0,
       totalAmount: finalTotal,
       shippingAddress: formattedShippingAddress,
       paymentMethod: "cash_on_delivery",
       couponCode: couponCode || null,
-      couponDiscount: 0,
+      couponDiscount: finalCouponDiscount, // ✅ কুপন ডিসকাউন্ট যোগ করুন
       specialInstructions: specialInstructions || "",
-      status: "pending", // confirmed was changed with pending as per client request
+      status: "pending",
       paymentStatus: "pending",
       isGuestOrder: false,
     }
 
-    console.log("Creating order with data:", JSON.stringify(orderData, null, 2))
+    console.log("📦 Creating order with coupon data:", {
+      couponCode: orderData.couponCode,
+      couponDiscount: orderData.couponDiscount,
+      finalTotal: orderData.totalAmount
+    })
 
     let order
     try {
       order = new Order(orderData)
       await order.save()
-      console.log("Order created successfully:", order._id)
+      console.log("✅ Order created successfully:", order._id)
+
+      // ✅ CHANGE 5: কুপন ইউসেজ ট্র্যাক করুন
+      if (validatedCoupon && finalCouponDiscount > 0) {
+        try {
+          await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+            $inc: { usedCount: 1 },
+            $addToSet: { usersUsed: userId }
+          });
+          console.log("✅ Coupon usage tracked:", validatedCoupon.code);
+        } catch (trackError) {
+          console.error("❌ Error tracking coupon usage:", trackError);
+        }
+      }
+
     } catch (saveError) {
       console.error("Error saving order:", saveError)
       return res.status(500).json({
@@ -476,35 +541,28 @@ const originalPrice = cartItem.originalPrice || product.basePrice || product.pri
       })
     }
 
+    // Socket notification
+    try {
+      const io = getIo();
+      const user = await User.findById(userId, 'name');
+      const customerName = user?.name || order.shippingAddress.fullName || 'Registered Customer';
 
-try {
-        // মনে রাখবেন, getIo ফাংশনটি ফাইলের শুরুতে অবশ্যই ইমপোর্ট করতে হবে: import { getIo } from "../utils/socket.js";
-        const io = getIo(); 
-        
-        // ইউজারের নাম নির্ধারণ
-        // যেহেতু এটি লগড-ইন ইউজারের রুট, আমরা User মডেল থেকে নাম নিতে পারি
-        const user = await User.findById(userId, 'name'); // User মডেল ইমপোর্ট করতে হবে
-        const customerName = user?.name || order.shippingAddress.fullName || 'Registered Customer';
-        
-        const notificationMessage = `New COD Order #${order.orderNumber} placed by ${customerName}`;
-        
-        const notificationData = {
-            message: notificationMessage,
-            orderId: order._id.toString(),
-            orderNumber: order.orderNumber,
-            timestamp: new Date().toISOString(),
-            link: `/orders/${order._id}` // Admin panel link
-        };
-        
-        // সকল কানেক্টেড ড্যাশবোর্ড ক্লায়েন্টদের কাছে ইমিট করা
-        io.emit('newOrderNotification', notificationData); 
-        console.log(`[Socket.IO] Emitted new COD order notification for: ${order.orderNumber}`);
+      const notificationMessage = `New COD Order #${order.orderNumber} placed by ${customerName}`;
+
+      const notificationData = {
+        message: notificationMessage,
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString(),
+        link: `/orders/${order._id}`
+      };
+
+      io.emit('newOrderNotification', notificationData);
+      console.log(`[Socket.IO] Emitted new COD order notification for: ${order.orderNumber}`);
 
     } catch (socketError) {
-        // Socket.IO ফেইল হলেও অর্ডারের প্রক্রিয়া চলতে থাকবে
-        console.error('[Socket.IO] Error emitting notification for COD order:', socketError.message);
+      console.error('[Socket.IO] Error emitting notification for COD order:', socketError.message);
     }
-
 
     // Update product stock after successful order creation
     try {
@@ -512,7 +570,6 @@ try {
       console.log("Product stock updated successfully")
     } catch (stockError) {
       console.error("Error updating product stock:", stockError)
-      // Don't fail the order if stock update fails, but log it
     }
 
     // Clear user's cart
@@ -531,15 +588,11 @@ try {
       console.log("Cart cleared for user:", userId)
     } catch (cartError) {
       console.log("Error clearing cart (non-critical):", cartError.message)
-      // Don't fail the order if cart clearing fails
     }
 
     // Order confirmation mail
     try {
-      // logged-in user হলে user DB থেকে ইমেইল বের করো
       const user = await User.findById(userId)
-
-      // shipping address এর ইমেইল থাকলে ওটা নাও, না থাকলে user.email নাও
       const toEmail = order?.shippingAddress?.email || user?.email
       console.log("📧 Sending confirmation email to:", toEmail)
 
@@ -581,7 +634,7 @@ export const initializeAamarpayPayment = async (req, res) => {
     console.log("=== Initialize Aamarpay Payment Request ===")
     console.log("Request body:", JSON.stringify(req.body, null, 2))
 
-    const { userId, shippingAddress, couponCode = null, specialInstructions = "" } = req.body
+    const { userId, shippingAddress, couponCode = null, couponDiscount = 0, specialInstructions = "" } = req.body
 
     // Validate required fields
     if (!userId) {
@@ -644,9 +697,45 @@ export const initializeAamarpayPayment = async (req, res) => {
       return res.status(400).json({ message: "No valid items in cart" })
     }
 
+
+    let finalCouponDiscount = 0;
+    let validatedCoupon = null;
+
+    if (couponCode && couponDiscount > 0) {
+      try {
+        console.log("🔍 Validating coupon:", couponCode);
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true
+        });
+
+        if (coupon) {
+          console.log("✅ Coupon found:", coupon.code);
+
+          // কুপন ভ্যালিডেশন চেক
+          if (!coupon.canUse) {
+            console.log("❌ Coupon cannot be used (expired/inactive)");
+          } else if (!coupon.canUserUse(userId)) {
+            console.log("❌ User cannot use this coupon (limit reached)");
+          } else if (coupon.minOrderAmount && subtotal < coupon.minOrderAmount) {
+            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${subtotal}`);
+          } else {
+            validatedCoupon = coupon;
+            finalCouponDiscount = couponDiscount;
+            console.log("🎉 Coupon validated successfully. Discount:", finalCouponDiscount);
+          }
+        } else {
+          console.log("❌ Coupon not found in database");
+        }
+      } catch (couponError) {
+        console.error("❌ Coupon validation error:", couponError);
+      }
+    }
+
+
     // Calculate shipping cost
     const shippingCost = calculateShippingCost(subtotal, shippingAddress.city)
-    const finalTotal = subtotal + shippingCost
+    const finalTotal = Math.max(subtotal + shippingCost - finalCouponDiscount, 0)
 
     // Generate order number
     const orderCount = await Order.countDocuments()
@@ -665,13 +754,25 @@ export const initializeAamarpayPayment = async (req, res) => {
       shippingAddress,
       paymentMethod: "card",
       couponCode,
-      couponDiscount: 0,
+      couponDiscount: finalCouponDiscount,
       specialInstructions,
       status: "pending",
       paymentStatus: "pending",
     })
 
     await order.save()
+
+    if (validatedCoupon && finalCouponDiscount > 0) {
+      try {
+        await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+          $inc: { usedCount: 1 },
+          $addToSet: { usersUsed: userId }
+        });
+        console.log("✅ Coupon usage tracked:", validatedCoupon.code);
+      } catch (trackError) {
+        console.error("❌ Error tracking coupon usage:", trackError);
+      }
+    }
 
     // Aamarpay payment data preparation
     const store_id = process.env.AMARPAY_STORE_ID
@@ -1122,12 +1223,12 @@ export const paymentCancel = async (req, res) => {
 export const paymentNotify = async (req, res) => {
   try {
     console.log(" === IPN/Notify Handler ===")
-    
+
     const callbackData = req.body
-    
+
     const tran_id = callbackData.mer_txnid || callbackData.tran_id || callbackData.transaction_id
-    const paymentStatus = callbackData.pay_status || callbackData.status 
-  
+    const paymentStatus = callbackData.pay_status || callbackData.status
+
     const isPaymentSuccessful = paymentStatus === "Successful" || paymentStatus === "success" || paymentStatus === "VALID" || paymentStatus === "VALIDATED"
 
     if (!tran_id) {
@@ -1139,8 +1240,8 @@ export const paymentNotify = async (req, res) => {
 
     if (!isPaymentSuccessful) {
       console.log(" Payment not successful in IPN:", paymentStatus)
-    
-      
+
+
       return res.status(200).send("OK - Payment not successful, skipping order processing")
     }
 
@@ -1178,9 +1279,9 @@ export const paymentNotify = async (req, res) => {
       const order = new Order({
         isGuestOrder: true,
         guestCustomerInfo: {
-            name: guestOrderData.customerInfo.name,
-            email: guestOrderData.customerInfo.email,
-            phone: guestOrderData.customerInfo.phone,
+          name: guestOrderData.customerInfo.name,
+          email: guestOrderData.customerInfo.email,
+          phone: guestOrderData.customerInfo.phone,
         },
         orderNumber: orderNumber,
         transactionId: tran_id,
@@ -1194,7 +1295,7 @@ export const paymentNotify = async (req, res) => {
         billingAddress: guestOrderData.billingAddress || guestOrderData.shippingAddress,
         paymentMethod: "card",
         couponCode: guestOrderData.couponCode || null,
-        couponDiscount: 0,
+        couponDiscount: guestOrderData.couponDiscount || 0,
         specialInstructions: guestOrderData.specialInstructions || "",
         status: "pending", // confirmed was changed with pending as per client request
         paymentStatus: "paid",
@@ -1214,16 +1315,16 @@ export const paymentNotify = async (req, res) => {
       console.log("✅ Guest order created via IPN:", order.orderNumber)
 
       global.pendingGuestOrders.delete(tran_id)
-await emitOrderNotification(order, 'GUEST');
+      await emitOrderNotification(order, 'GUEST');
       // Send confirmation email
       try {
         const toEmail = order.shippingAddress.email || order.guestCustomerInfo.email;
         if (toEmail) {
-            await sendOrderEmails(order, toEmail, true) // isGuest = true
-            console.log("✅ Guest order confirmation email sent")
+          await sendOrderEmails(order, toEmail, true) // isGuest = true
+          console.log("Guest order confirmation email sent")
         }
       } catch (emailError) {
-        console.error("❌ Error sending confirmation email:", emailError)
+        console.error("Error sending confirmation email:", emailError)
       }
 
       return res.status(200).send("OK - Guest order processed successfully")
@@ -1234,7 +1335,7 @@ await emitOrderNotification(order, 'GUEST');
 
       const order = await Order.findOne({ transactionId: tran_id })
       if (order) {
-await emitOrderNotification(order, 'ONLINE');
+        await emitOrderNotification(order, 'ONLINE');
         order.paymentStatus = "paid"
         order.status = "pending" // confirmed was changed with pending as per client request
         order.paymentGatewayResponse = {
@@ -1245,23 +1346,42 @@ await emitOrderNotification(order, 'ONLINE');
         await order.save()
 
         console.log("✅ User order payment status updated:", order.orderNumber)
+
         
+
+// ############## tracker for coupon usage in user order IPN
+ if (guestOrderData.couponCode && guestOrderData.couponDiscount > 0) {
+    try {
+      const coupon = await Coupon.findOne({ code: guestOrderData.couponCode.toUpperCase() });
+      if (coupon) {
+        await Coupon.findByIdAndUpdate(coupon._id, {
+          $inc: { usedCount: 1 }
+        });
+        console.log("✅ Guest coupon usage tracked:", coupon.code);
+      }
+    } catch (trackError) {
+      console.error("❌ Error tracking guest coupon usage:", trackError);
+    }
+  }
+  // ############## tracker for coupon usage in user order IPN
+
+
 
         try {
 
-            const user = await User.findById(order.userId); 
-          
-            const toEmail = order.shippingAddress?.email || user?.email;
-            
-            if (toEmail) {
-             
-                await sendOrderEmails(order, toEmail, false); 
-                console.log("✅ Logged-in user order confirmation email sent.");
-            }
+          const user = await User.findById(order.userId);
+
+          const toEmail = order.shippingAddress?.email || user?.email;
+
+          if (toEmail) {
+
+            await sendOrderEmails(order, toEmail, false);
+            console.log("✅ Logged-in user order confirmation email sent.");
+          }
         } catch (mailError) {
-            console.error("❌ Failed to send confirmation email for logged-in user:", mailError);
+          console.error("❌ Failed to send confirmation email for logged-in user:", mailError);
         }
-        
+
         return res.status(200).send("OK - User order updated successfully")
       } else {
         console.log("❌ User order not found for transaction:", tran_id)

@@ -3,6 +3,8 @@
 import Cart from "../models/Cart.js"
 import Product from "../models/Product.js"
 import Order from "../models/Order.js"
+import Coupon from "../models/Coupon.js";
+import { validateCouponLogic } from "../utils/couponValidator.js";
 
 // Get checkout summary
 export const getCheckoutSummary = async (req, res) => {
@@ -102,6 +104,29 @@ export const getCheckoutSummary = async (req, res) => {
     const tax = Math.round(subtotal * taxRate)
 
     const finalTotal = subtotal + shippingCost + tax
+let couponDiscount = 0;
+    let appliedCoupon = null;
+
+
+    if (couponCode) {
+      try {
+        const couponValidation = await validateCouponForCheckout(
+          couponCode, 
+          userId, 
+          subtotal,
+          totalDiscount
+        );
+
+        if (couponValidation.isValid) {
+          couponDiscount = couponValidation.discountAmount;
+          finalTotal = Math.max(0, finalTotal - couponDiscount);
+          appliedCoupon = couponValidation.coupon;
+        }
+      } catch (couponError) {
+        console.log("Coupon validation error:", couponError.message);
+      }
+    }
+
 
     const checkoutSummary = {
       items: updatedItems,
@@ -109,14 +134,22 @@ export const getCheckoutSummary = async (req, res) => {
         totalOriginalAmount,
         subtotal,
         totalDiscount,
+        couponDiscount,
         shippingCost,
         tax,
         taxRate: taxRate * 100,
         finalTotal,
       },
+      appliedCoupon: appliedCoupon ? {
+        code: appliedCoupon.code,
+        name: appliedCoupon.name,
+        discountAmount: couponDiscount,
+        discountType: appliedCoupon.discountType,
+        value: appliedCoupon.value
+      } : null,
       itemCount: updatedItems.length,
       totalQuantity: updatedItems.reduce((sum, item) => sum + item.quantity, 0),
-    }
+    };
 
     res.status(200).json({
       message: "Checkout summary retrieved successfully",
@@ -127,6 +160,81 @@ export const getCheckoutSummary = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message })
   }
 }
+
+
+async function validateCouponForCheckout(couponCode, userId, orderAmount, existingDiscount = 0) {
+  try {
+    // Find active coupon
+    const coupon = await Coupon.findOne({ 
+      code: couponCode.toUpperCase(), 
+      isActive: true 
+    });
+
+    if (!coupon) {
+      return { isValid: false, message: "Invalid coupon code" };
+    }
+
+    // Check basic coupon validity using the virtual property
+    if (!coupon.canUse) {
+      return { isValid: false, message: "This coupon is no longer valid" };
+    }
+
+    // Check per user limit
+    if (!coupon.canUserUse(userId)) {
+      return { isValid: false, message: "You have already used this coupon maximum times" };
+    }
+
+    // Check minimum order amount
+    if (coupon.minOrderAmount && orderAmount < coupon.minOrderAmount) {
+      return {
+        isValid: false,
+        message: `Minimum order amount of ৳${coupon.minOrderAmount} required for this coupon`,
+      };
+    }
+
+    // Check total discount limit (50% rule)
+    if (coupon.discountType === 'percentage') {
+      const totalDiscountPercentage = existingDiscount + coupon.value;
+      if (totalDiscountPercentage > 50) {
+        const maxCouponDiscount = 50 - existingDiscount;
+        return {
+          isValid: false,
+          message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
+        };
+      }
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+
+    if (coupon.discountType === 'percentage') {
+      discountAmount = (orderAmount * coupon.value) / 100;
+      if (coupon.maxDiscountAmount) {
+        discountAmount = Math.min(discountAmount, coupon.maxDiscountAmount);
+      }
+    } else {
+      discountAmount = Math.min(coupon.value, orderAmount);
+    }
+
+    // Apply custom options
+    if (coupon.customOption === 'free-delivery') {
+      // ফ্রি ডেলিভারি লজিক - shipping cost কমানো হবে পরবর্তী স্টেপে
+      discountAmount += 0; // শিপিং কস্ট আলাদাভাবে হ্যান্ডল করতে হবে
+    }
+
+    return {
+      isValid: true,
+      coupon: coupon,
+      discountAmount: discountAmount,
+      message: "Coupon applied successfully"
+    };
+
+  } catch (error) {
+    console.error("Coupon validation error:", error);
+    return { isValid: false, message: "Error validating coupon" };
+  }
+}
+
 
 // Apply coupon code
 export const applyCoupon = async (req, res) => {
@@ -163,75 +271,75 @@ export const applyCoupon = async (req, res) => {
 // Process checkout and create order
 export const processCheckout = async (req, res) => {
   try {
-    const { userId, shippingAddress, paymentMethod, couponCode = null, specialInstructions = "" } = req.body
+    const { userId, shippingAddress, paymentMethod, couponCode = null, specialInstructions = "" } = req.body;
 
     // Validate required fields
     if (!shippingAddress || !paymentMethod) {
-      return res.status(400).json({ message: "Shipping address and payment method are required" })
+      return res.status(400).json({ message: "Shipping address and payment method are required" });
     }
 
     // Get user's cart
-    const cart = await Cart.findOne({ userId }).populate("items.productId")
+    const cart = await Cart.findOne({ userId }).populate("items.productId");
     if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: "Cart is empty" })
+      return res.status(400).json({ message: "Cart is empty" });
     }
 
     // Re-validate cart items and stock (final check)
-    const validationErrors = []
-    const orderItems = []
-    let subtotal = 0
-    let totalDiscount = 0
+    const validationErrors = [];
+    const orderItems = [];
+    let subtotal = 0;
+    let totalDiscount = 0;
 
     for (const cartItem of cart.items) {
-      const product = cartItem.productId
+      const product = cartItem.productId;
 
       // Final stock check
       if (cartItem.variantId) {
-        const variant = product.variants.id(cartItem.variantId)
+        const variant = product.variants.id(cartItem.variantId);
         if (!variant || variant.stock < cartItem.quantity) {
-          validationErrors.push(`Insufficient stock for ${product.title} - ${variant?.size}`)
-          continue
+          validationErrors.push(`Insufficient stock for ${product.title} - ${variant?.size}`);
+          continue;
         }
       }
 
       if (cartItem.colorVariantId) {
-        const colorVariant = product.colorVariants.id(cartItem.colorVariantId)
+        const colorVariant = product.colorVariants.id(cartItem.colorVariantId);
         if (!colorVariant || colorVariant.stock < cartItem.quantity) {
-          validationErrors.push(`Insufficient stock for ${product.title} - ${colorVariant?.name}`)
-          continue
+          validationErrors.push(`Insufficient stock for ${product.title} - ${colorVariant?.name}`);
+          continue;
         }
       }
 
       if (product.stock < cartItem.quantity) {
-        validationErrors.push(`Insufficient stock for ${product.title}`)
-        continue
+        validationErrors.push(`Insufficient stock for ${product.title}`);
+        continue;
       }
 
       // Get current pricing
-      const pricingDetails = product.getPricingDetails(cartItem.variantId)
+      const pricingDetails = product.getPricingDetails(cartItem.variantId);
 
       // Get variant and color variant details
-      let variantDetails = null
+      let variantDetails = null;
       if (cartItem.variantId) {
-        const variant = product.variants.id(cartItem.variantId)
+        const variant = product.variants.id(cartItem.variantId);
         variantDetails = {
           size: variant.size,
           dimension: variant.dimension,
-        }
+        };
       }
 
-      let colorVariantDetails = null
+      let colorVariantDetails = null;
       if (cartItem.colorVariantId) {
-        const colorVariant = product.colorVariants.id(cartItem.colorVariantId)
+        const colorVariant = product.colorVariants.id(cartItem.colorVariantId);
         colorVariantDetails = {
           name: colorVariant.name,
           code: colorVariant.code,
-        }
+        };
       }
 
-      const totalOriginalPrice = pricingDetails.originalPrice * cartItem.quantity
-      const totalDiscountedPrice = pricingDetails.discountedPrice * cartItem.quantity
-      const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice
+      const totalOriginalPrice = pricingDetails.originalPrice * cartItem.quantity;
+      const totalDiscountedPrice = pricingDetails.discountedPrice * cartItem.quantity;
+      const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
 
       const orderItem = {
         productId: product._id,
@@ -248,73 +356,99 @@ export const processCheckout = async (req, res) => {
         totalOriginalPrice,
         totalDiscountedPrice,
         discountAmount: itemDiscountAmount,
-      }
+      };
 
-      orderItems.push(orderItem)
-      subtotal += totalDiscountedPrice
-      totalDiscount += itemDiscountAmount
+      orderItems.push(orderItem);
+      subtotal += totalDiscountedPrice;
+      totalDiscount += itemDiscountAmount;
     }
 
     if (validationErrors.length > 0) {
       return res.status(400).json({
         message: "Checkout validation failed",
         errors: validationErrors,
-      })
+      });
     }
 
     // Apply coupon if provided
-    let couponDiscount = 0
+    let couponDiscount = 0;
+    let appliedCoupon = null;
+
     if (couponCode) {
-      const couponValidation = validateCoupon(couponCode, subtotal)
+      const couponValidation = await validateCouponForCheckout(
+        couponCode, 
+        userId, 
+        subtotal,
+        totalDiscount
+      );
+
       if (couponValidation.isValid) {
-        couponDiscount = couponValidation.discount
-        subtotal -= couponDiscount
+        couponDiscount = couponValidation.discountAmount;
+        appliedCoupon = couponValidation.coupon;
+        
+        // Update coupon usage
+        await Coupon.findByIdAndUpdate(appliedCoupon._id, {
+          $inc: { usedCount: 1 },
+          $addToSet: { usersUsed: userId }
+        });
+      } else {
+        return res.status(400).json({
+          message: "Coupon validation failed",
+          error: couponValidation.message
+        });
       }
     }
 
     // Calculate shipping and tax
-    const shippingCost = calculateShippingCost(subtotal)
-    const tax = Math.round(subtotal * 0.05) // 5% tax
-    const finalTotal = subtotal + shippingCost + tax
+    let shippingCost = calculateShippingCost(subtotal);
+    
+    // Apply free delivery if coupon has free-delivery option
+    if (appliedCoupon && appliedCoupon.customOption === 'free-delivery') {
+      couponDiscount += shippingCost; // Add shipping cost to coupon discount
+      shippingCost = 0;
+    }
+
+    const tax = Math.round(subtotal * 0.05); // 5% tax
+    const finalTotal = Math.max(0, subtotal + shippingCost + tax - couponDiscount);
 
     // Create order
     const order = new Order({
       userId,
       items: orderItems,
-      subtotal: subtotal + couponDiscount, // Original subtotal before coupon
+      subtotal: subtotal,
       totalDiscount: totalDiscount + couponDiscount,
       shippingCost,
       tax,
       totalAmount: finalTotal,
       shippingAddress,
       paymentMethod,
-      couponCode,
+      couponCode: appliedCoupon ? appliedCoupon.code : null,
       couponDiscount,
       specialInstructions,
-    })
+    });
 
-    await order.save()
+    await order.save();
 
     // Update product stock
     for (const item of orderItems) {
-      const product = await Product.findById(item.productId)
+      const product = await Product.findById(item.productId);
 
       if (item.variantId) {
-        const variant = product.variants.id(item.variantId)
+        const variant = product.variants.id(item.variantId);
         if (variant) {
-          variant.stock = Math.max(0, variant.stock - item.quantity)
+          variant.stock = Math.max(0, variant.stock - item.quantity);
         }
       }
 
       if (item.colorVariantId) {
-        const colorVariant = product.colorVariants.id(item.colorVariantId)
+        const colorVariant = product.colorVariants.id(item.colorVariantId);
         if (colorVariant) {
-          colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity)
+          colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity);
         }
       }
 
-      product.stock = Math.max(0, product.stock - item.quantity)
-      await product.save()
+      product.stock = Math.max(0, product.stock - item.quantity);
+      await product.save();
     }
 
     // Clear cart
@@ -326,7 +460,7 @@ export const processCheckout = async (req, res) => {
         totalDiscountAmount: 0,
         finalAmount: 0,
       },
-    )
+    );
 
     res.status(201).json({
       message: "Order placed successfully",
@@ -336,13 +470,15 @@ export const processCheckout = async (req, res) => {
         status: order.status,
         paymentStatus: order.paymentStatus,
         _id: order._id,
+        couponApplied: !!appliedCoupon,
+        couponDiscount: couponDiscount
       },
-    })
+    });
   } catch (error) {
-    console.error("Process checkout error:", error)
-    res.status(500).json({ message: "Internal server error", error: error.message })
+    console.error("Process checkout error:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
-}
+};
 
 // Helper function to calculate shipping cost
 function calculateShippingCost(subtotal) {

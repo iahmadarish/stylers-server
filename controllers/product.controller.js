@@ -1510,3 +1510,37 @@ export const getProductReviewsBySlug = async (req, res) => {
     res.status(500).json({ status: "error", message: error.message })
   }
 }
+
+export const getProductStats = async (req, res) => {
+  try {
+    const activeProducts = await Product.countDocuments({ isActive: true });
+    const inactiveProducts = await Product.countDocuments({ isActive: false });
+    
+    // Calculate total stock from all products
+    const stockData = await Product.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalStock: { $sum: "$stock" }
+        }
+      }
+    ]);
+
+    const totalStock = stockData[0]?.totalStock || 0;
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        activeProducts,
+        inactiveProducts,
+        totalStock
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching product stats:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
+  }
+};

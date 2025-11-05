@@ -6,6 +6,7 @@ import User from "../models/User.js"
 import { createPathaoOrder } from "../services/pathaoService.js";
 import { PATHAO_BASE_URL } from "../services/pathaoService.js";
 import { getIo } from "../utils/socket.js"
+import Coupon from "../models/Coupon.js";
 
 
 // ##########################################################
@@ -35,9 +36,199 @@ const generateOrderNumber = (serialNum) => {
 // updated this function for comprehensive order updates
 // ##########################################################
 
+// export const createOrder = async (req, res) => {
+//   try {
+//     const { userId, shippingAddress, paymentMethod, shippingCost = 0 } = req.body;
+
+//     // Get user's cart
+//     const cart = await Cart.findOne({ userId }).populate("items.productId");
+//     if (!cart || cart.items.length === 0) {
+//       return res.status(400).json({ message: "Cart is empty" });
+//     }
+
+//     // Prepare order items with detailed pricing
+//     const orderItems = [];
+//     let subtotal = 0;
+//     let totalDiscount = 0;
+
+//     for (const cartItem of cart.items) {
+//       const product = cartItem.productId;
+
+//       // Get variant details if exists
+//       let variantDetails = null;
+//       if (cartItem.variantId) {
+//         variantDetails = product.variants.id(cartItem.variantId);
+//       }
+
+//       // Get color variant details if exists
+//       let colorVariantDetails = null;
+//       if (cartItem.colorVariantId) {
+//         colorVariantDetails = product.colorVariants.id(cartItem.colorVariantId);
+//       }
+
+//       const totalOriginalPrice = cartItem.originalPrice * cartItem.quantity;
+//       const totalDiscountedPrice = cartItem.discountedPrice * cartItem.quantity;
+//       const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+//       const orderItem = {
+//         productId: product._id,
+//         productTitle: product.title,
+//         productImage: colorVariantDetails?.images[0] || product.images[0] || "/placeholder.svg?height=200&width=200",
+//         variantId: cartItem.variantId,
+//         variantDetails: variantDetails
+//           ? {
+//             size: variantDetails.size,
+//             dimension: variantDetails.dimension,
+//           }
+//           : null,
+//         colorVariantId: cartItem.colorVariantId,
+//         colorVariantDetails: colorVariantDetails
+//           ? {
+//             name: colorVariantDetails.name,
+//             code: colorVariantDetails.code,
+//           }
+//           : null,
+//         quantity: cartItem.quantity,
+//         originalPrice: cartItem.originalPrice,
+//         discountedPrice: cartItem.discountedPrice,
+//         discountPercentage: cartItem.discountPercentage,
+//         totalOriginalPrice,
+//         totalDiscountedPrice,
+//         discountAmount: itemDiscountAmount,
+//       };
+
+//       orderItems.push(orderItem);
+//       subtotal += totalDiscountedPrice;
+//       totalDiscount += itemDiscountAmount;
+//     }
+
+//     const totalAmount = subtotal + shippingCost;
+
+//     // Generate order number
+//     const orderCount = await Order.countDocuments()
+//     const serialNumber = orderCount + 1
+
+//     const orderNumber = generateOrderNumber(serialNumber) 
+//   console.log(`Generated New Order Number: ${orderNumber}`)
+
+//     // Create order
+//     const order = new Order({
+//       userId,
+//       orderNumber,
+//       items: orderItems,
+//       subtotal,
+//       totalDiscount,
+//       shippingCost,
+//       totalAmount,
+//       shippingAddress,
+//       paymentMethod,
+//       isGuestOrder: false,
+//     });
+
+//     await order.save();
+//     console.log('✅ Order created successfully:', order.orderNumber);
+
+
+
+//     // =======================================================
+//     // 🔔 Socket.IO Notification Block - START 
+//     // =======================================================
+//     try {
+//       const io = getIo();
+//       const customerName = order.shippingAddress.fullName || 'a Customer';
+//       const notificationMessage = `New Order #${order.orderNumber} placed by ${customerName}`
+      
+//       const notificationData = {
+//         message: notificationMessage,
+//         orderId: order._id.toString(),
+//         orderNumber: order.orderNumber,
+//         timestamp: new Date().toISOString(),
+//         link: `/orders/${order._id}` 
+//       }
+      
+//       // Emit the notification to all connected clients (e.g., admin dashboard)
+//       io.emit('newOrderNotification', notificationData); 
+//       console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
+
+//     } catch (socketError) {
+//       // Socket error should not block the main process
+//       console.error('[Socket.IO] Error emitting notification:', socketError.message);
+//     }
+
+
+//     // Send confirmation email using the new helper function
+//     try {
+//       const email = order.shippingAddress.email;
+//       const customerName = order.shippingAddress.fullName || 'Customer';
+
+//       console.log('📧 Sending email to logged-in user:', email);
+
+//       if (email) {
+//         const emailResult = await sendOrderEmails({
+//           email: email,
+//           customerName: customerName,
+//           orderNumber: order.orderNumber,
+//           orderDate: order.createdAt.toLocaleDateString('en-GB'),
+//           totalAmount: `৳${order.totalAmount.toLocaleString()}`,
+//           paymentMethod: order.paymentMethod,
+//         });
+
+//         if (emailResult.success) {
+//           console.log('✅ Email sent to logged-in user');
+//         }
+//       }
+//     } catch (emailError) {
+//       console.error('❌ Email error:', emailError.message);
+//     }
+
+
+//     console.log("📦 Order created:", order._id);
+//     console.log("📧 Trying to send email...");
+
+
+//     // Update product stock
+//     await updateProductStock(orderItems);
+
+//     // Clear cart after successful order
+//     await Cart.findOneAndUpdate(
+//       { userId },
+//       {
+//         items: [],
+//         totalAmount: 0,
+//         totalDiscountAmount: 0,
+//         finalAmount: 0,
+//       },
+//     );
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Order created successfully",
+//       data: { order },
+//     });
+
+//   } catch (error) {
+//     console.error("❌ Create order error:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message
+//     });
+//   }
+// };
+
+
+// ##########################################################
+// Updated with coupon support 
+// ##########################################################
 export const createOrder = async (req, res) => {
   try {
-    const { userId, shippingAddress, paymentMethod, shippingCost = 0 } = req.body;
+    const { 
+      userId, 
+      shippingAddress, 
+      paymentMethod, 
+      shippingCost = 0,
+      couponCode = null,
+      couponDiscount = 0 // ✅ কুপন ডিসকাউন্ট নিন
+    } = req.body;
 
     // Get user's cart
     const cart = await Cart.findOne({ userId }).populate("items.productId");
@@ -101,16 +292,58 @@ export const createOrder = async (req, res) => {
       totalDiscount += itemDiscountAmount;
     }
 
-    const totalAmount = subtotal + shippingCost;
+    // ✅ CHANGE: কুপন ভ্যালিডেশন যোগ করুন
+    let finalCouponDiscount = 0;
+    let validatedCoupon = null;
+
+    if (couponCode && couponDiscount > 0) {
+      try {
+        console.log("🔍 Validating coupon:", couponCode);
+        const coupon = await Coupon.findOne({ 
+          code: couponCode.toUpperCase(), 
+          isActive: true 
+        });
+
+        if (coupon) {
+          console.log("✅ Coupon found:", coupon.code);
+          
+          // কুপন ভ্যালিডেশন চেক
+          if (!coupon.canUse) {
+            console.log("❌ Coupon cannot be used (expired/inactive)");
+          } else if (!coupon.canUserUse(userId)) {
+            console.log("❌ User cannot use this coupon (limit reached)");
+          } else if (coupon.minOrderAmount && subtotal < coupon.minOrderAmount) {
+            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${subtotal}`);
+          } else {
+            validatedCoupon = coupon;
+            finalCouponDiscount = couponDiscount;
+            console.log("🎉 Coupon validated successfully. Discount:", finalCouponDiscount);
+          }
+        } else {
+          console.log("❌ Coupon not found in database");
+        }
+      } catch (couponError) {
+        console.error("❌ Coupon validation error:", couponError);
+      }
+    }
+
+    // ✅ CHANGE: টোটাল ক্যালকুলেশনে কুপন ডিসকাউন্ট অ্যাপ্লাই করুন
+    const totalAmount = Math.max(subtotal + shippingCost - finalCouponDiscount, 0);
+
+    console.log("💰 Order Calculation WITH COUPON:", {
+      subtotal,
+      shippingCost,
+      couponDiscount: finalCouponDiscount,
+      totalAmount
+    });
 
     // Generate order number
     const orderCount = await Order.countDocuments()
     const serialNumber = orderCount + 1
-
     const orderNumber = generateOrderNumber(serialNumber) 
-  console.log(`Generated New Order Number: ${orderNumber}`)
+    console.log(`Generated New Order Number: ${orderNumber}`)
 
-    // Create order
+    // ✅ CHANGE: Create order with coupon data
     const order = new Order({
       userId,
       orderNumber,
@@ -121,13 +354,26 @@ export const createOrder = async (req, res) => {
       totalAmount,
       shippingAddress,
       paymentMethod,
+      couponCode: couponCode || null,
+      couponDiscount: finalCouponDiscount, // ✅ কুপন ডিসকাউন্ট যোগ করুন
       isGuestOrder: false,
     });
 
     await order.save();
     console.log('✅ Order created successfully:', order.orderNumber);
 
-
+    // ✅ CHANGE: কুপন ইউসেজ ট্র্যাক করুন
+    if (validatedCoupon && finalCouponDiscount > 0) {
+      try {
+        await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+          $inc: { usedCount: 1 },
+          $addToSet: { usersUsed: userId }
+        });
+        console.log("✅ Coupon usage tracked:", validatedCoupon.code);
+      } catch (trackError) {
+        console.error("❌ Error tracking coupon usage:", trackError);
+      }
+    }
 
     // =======================================================
     // 🔔 Socket.IO Notification Block - START 
@@ -154,7 +400,6 @@ export const createOrder = async (req, res) => {
       console.error('[Socket.IO] Error emitting notification:', socketError.message);
     }
 
-
     // Send confirmation email using the new helper function
     try {
       const email = order.shippingAddress.email;
@@ -180,10 +425,8 @@ export const createOrder = async (req, res) => {
       console.error('❌ Email error:', emailError.message);
     }
 
-
     console.log("📦 Order created:", order._id);
     console.log("📧 Trying to send email...");
-
 
     // Update product stock
     await updateProductStock(orderItems);
@@ -219,6 +462,287 @@ export const createOrder = async (req, res) => {
 // THIS IS MAIN FUNCTION FOR CREATING ORDER AS A GUEST USER. 
 // ##########################################################
 
+// export const createGuestOrder = async (req, res) => {
+//   try {
+//     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
+
+//     const {
+//       customerInfo,
+//       shippingAddress,
+//       billingAddress,
+//       items,
+//       paymentMethod,
+//       shippingCost = 0, 
+//       specialInstructions = "",
+//     } = req.body;
+
+//     if (!customerInfo) {
+//       return res.status(400).json({ message: "Customer information is required" });
+//     }
+
+//     if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
+//       return res.status(400).json({
+//         message: "Customer name, email, and phone are required",
+//         missing: {
+//           name: !customerInfo.name,
+//           email: !customerInfo.email,
+//           phone: !customerInfo.phone,
+//         },
+//       });
+//     }
+
+//     if (!shippingAddress) {
+//       return res.status(400).json({ message: "Shipping address is required" });
+//     }
+
+//     if (!shippingAddress.address || !shippingAddress.city) {
+//       return res.status(400).json({
+//         message: "Shipping address and city are required",
+//         missing: {
+//           address: !shippingAddress.address,
+//           city: !shippingAddress.city,
+//         },
+//       });
+//     }
+
+//     if (!items || !Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({ message: "Order items are required" });
+//     }
+
+//     if (!paymentMethod) {
+//       return res.status(400).json({ message: "Payment method is required" });
+//     }
+
+//     // Prepare order items with detailed pricing
+//     const orderItems = [];
+//     let calculatedSubtotal = 0;
+//     let calculatedTotalDiscount = 0;
+
+//     for (const item of items) {
+//       // Fetch product details to ensure data integrity
+//       const product = await Product.findById(item.productId);
+//       if (!product) {
+//         return res.status(400).json({ message: `Product not found: ${item.productId}` });
+//       }
+
+//       // Get variant details if exists
+//       let variantDetails = null;
+//       if (item.variantId) {
+//         variantDetails = product.variants.id(item.variantId);
+//       }
+
+//       // Get color variant details if exists
+//       let colorVariantDetails = null;
+//       if (item.colorVariantId) {
+//         // Fix: Check if colorVariants exists and is an array before calling methods on it
+//         if (product.colorVariants && Array.isArray(product.colorVariants)) {
+//           if (item.colorVariantId.startsWith('#')) {
+//             // It's a color code, find by colorCode
+//             colorVariantDetails = product.colorVariants.find(
+//               cv => cv && cv.colorCode === item.colorVariantId
+//             );
+//           } else {
+//             // It's an ObjectId, try to find by ID
+//             try {
+//               colorVariantDetails = product.colorVariants.id(item.colorVariantId);
+//             } catch (error) {
+//               console.log("Error finding color variant by ID:", error.message);
+//               // Fallback: try to find by colorCode if ID search fails
+//               colorVariantDetails = product.colorVariants.find(
+//                 cv => cv && cv.colorCode === item.colorVariantId
+//               );
+//             }
+//           }
+//         } else {
+//           console.log("Warning: Product colorVariants is not an array or is undefined");
+//         }
+//       }
+
+//       const totalOriginalPrice = item.originalPrice * item.quantity;
+//       const totalDiscountedPrice = item.discountedPrice * item.quantity;
+//       const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+//       const orderItem = {
+//         productId: product._id,
+//         productTitle: item.productTitle || product.title,
+//         productImage:
+//           item.productImage ||
+//           (colorVariantDetails && colorVariantDetails.images && colorVariantDetails.images[0]) ||
+//           (product.images && product.images[0]) ||
+//           "/placeholder.svg?height=200&width=200",
+//         variantId: item.variantId,
+//         variantDetails: variantDetails
+//           ? {
+//             size: variantDetails.size,
+//             dimension: variantDetails.dimension,
+//           }
+//           : null,
+//         // FIX: Only set colorVariantId if it's a valid ObjectId, not color code
+//         colorVariantId: item.colorVariantId && item.colorVariantId.startsWith('#') ? null : item.colorVariantId,
+//         colorVariantDetails: colorVariantDetails
+//           ? {
+//             name: colorVariantDetails.name,
+//             code: colorVariantDetails.code,
+//           }
+//           : null,
+//         quantity: item.quantity,
+//         originalPrice: item.originalPrice,
+//         discountedPrice: item.discountedPrice,
+//         discountPercentage: item.discountPercentage || 0,
+//         totalOriginalPrice,
+//         totalDiscountedPrice,
+//         discountAmount: Math.max(0, itemDiscountAmount),
+//       };
+
+//       orderItems.push(orderItem);
+//       calculatedSubtotal += totalDiscountedPrice;
+//       calculatedTotalDiscount += itemDiscountAmount;
+//     }
+
+//     // ✅ NEW: Calculate shipping cost dynamically like logged-in users
+//     const calculateShippingCost = (subtotal, city) => {
+//       if (subtotal >= 4000) return 0;
+//       const isDhaka = city && city.toLowerCase().includes("dhaka");
+//       return isDhaka ? 70 : 130;
+//     };
+
+//     const dynamicShippingCost = calculateShippingCost(calculatedSubtotal, shippingAddress.city);
+//     const calculatedTotalAmount = calculatedSubtotal + dynamicShippingCost;
+
+//     console.log("Shipping cost calculation:", {
+//       subtotal: calculatedSubtotal,
+//       city: shippingAddress.city,
+//       shippingCost: dynamicShippingCost,
+//       totalAmount: calculatedTotalAmount
+//     });
+//     const orderCount = await Order.countDocuments();
+//     const serialNumber = orderCount + 1; 
+//     const orderNumber = generateOrderNumber(serialNumber);
+//     console.log(`Generated Guest Order Number: ${orderNumber}`);
+
+
+//     // Prepare billing address - handle both cases
+//     const finalBillingAddress =
+//       billingAddress?.sameAsShipping !== false
+//         ? {
+//           fullName: shippingAddress.fullName || customerInfo.name,
+//           phone: shippingAddress.phone || customerInfo.phone,
+//           email: shippingAddress.email || customerInfo.email,
+//           address: shippingAddress.address,
+//           city: shippingAddress.city,
+//           state: shippingAddress.state || "",
+//           zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
+//           country: shippingAddress.country || "Bangladesh",
+//           sameAsShipping: true,
+//         }
+//         : {
+//           fullName: billingAddress.fullName || customerInfo.name,
+//           phone: billingAddress.phone || customerInfo.phone,
+//           email: billingAddress.email || customerInfo.email,
+//           address: billingAddress.address,
+//           city: billingAddress.city,
+//           state: billingAddress.state || "",
+//           zipCode: billingAddress.zipCode || billingAddress.postalCode || "",
+//           country: billingAddress.country || "Bangladesh",
+//           sameAsShipping: false,
+//         };
+
+//     // Create guest order
+//     const order = new Order({
+//       isGuestOrder: true,
+//       guestCustomerInfo: {
+//         name: customerInfo.name,
+//         email: customerInfo.email,
+//         phone: customerInfo.phone,
+//       },
+//       orderNumber,
+//       items: orderItems,
+//       subtotal: calculatedSubtotal,
+//       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
+//       shippingCost: dynamicShippingCost, // dynamic shipping cost added to filed
+//       totalAmount: calculatedTotalAmount,
+//       shippingAddress: {
+//         fullName: shippingAddress.fullName || customerInfo.name,
+//         phone: shippingAddress.phone || customerInfo.phone,
+//         email: shippingAddress.email || customerInfo.email,
+//         address: shippingAddress.address,
+//         city: shippingAddress.city,
+//         state: shippingAddress.state || "",
+//         zipCode: shippingAddress.zipCode || shippingAddress.postalCode || "",
+//         country: shippingAddress.country || "Bangladesh",
+//       },
+//       billingAddress: finalBillingAddress,
+//       paymentMethod,
+//       specialInstructions,
+//       status: "pending", // confirm can be changed to pending
+//       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
+//     });
+
+//     console.log("Creating order with data:", JSON.stringify(order.toObject(), null, 2));
+
+//     await order.save();
+
+// try {
+//   const io = getIo(); // <-- নিশ্চিত করুন যে getIo() ইমপোর্ট করা হয়েছে
+//   const customerName = order.shippingAddress.fullName || 'a Guest Customer';
+//   const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
+  
+//   const notificationData = {
+//     message: notificationMessage,
+//     orderId: order._id.toString(),
+//     orderNumber: order.orderNumber,
+//     timestamp: new Date().toISOString(),
+//     link: `/orders/${order._id}` 
+//   }
+  
+//   io.emit('newOrderNotification', notificationData); 
+//   console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`); // <-- এই লগটি আপনার সার্ভার লগে আসা উচিত
+
+// } catch (socketError) {
+//   console.error('[Socket.IO] Error emitting notification:', socketError.message);
+// }
+
+
+
+//     // Send confirmation email using the new helper function
+//     try {
+//       const guestEmail = order.guestCustomerInfo.email;
+//       const emailResult = await sendOrderEmails(order, order.guestCustomerInfo.email, true); // true = guest order
+
+//       if (emailResult.success) {
+//         console.log('✅ Guest confirmation email sent successfully');
+//       } else {
+//         console.error('❌ Failed to send guest email:', emailResult.error);
+//       }
+//     } catch (emailError) {
+//       console.error('❌ Guest email sending error:', emailError.message);
+//     }
+
+//     // Update product stock
+//     await updateProductStock(orderItems);
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Guest order created successfully",
+//       data: {
+//         order,
+//         orderNumber: order.orderNumber,
+//         trackingInfo: {
+//           orderNumber: order.orderNumber,
+//           email: customerInfo.email,
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Create guest order error:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+//     });
+//   }
+// };
+
 export const createGuestOrder = async (req, res) => {
   try {
     console.log("Received guest order request:", JSON.stringify(req.body, null, 2));
@@ -230,6 +754,8 @@ export const createGuestOrder = async (req, res) => {
       items,
       paymentMethod,
       shippingCost = 0, 
+      couponCode = null,
+      couponDiscount = 0, // ✅ কুপন ডিসকাউন্ট নিন
       specialInstructions = "",
     } = req.body;
 
@@ -364,19 +890,58 @@ export const createGuestOrder = async (req, res) => {
     };
 
     const dynamicShippingCost = calculateShippingCost(calculatedSubtotal, shippingAddress.city);
-    const calculatedTotalAmount = calculatedSubtotal + dynamicShippingCost;
+    
+    // ✅ CHANGE: টোটাল ক্যালকুলেশনে কুপন ডিসকাউন্ট অ্যাপ্লাই করুন
+    const calculatedTotalAmount = Math.max(calculatedSubtotal + dynamicShippingCost - couponDiscount, 0);
 
-    console.log("Shipping cost calculation:", {
+    console.log("💰 Guest Order Calculation WITH COUPON:", {
       subtotal: calculatedSubtotal,
       city: shippingAddress.city,
       shippingCost: dynamicShippingCost,
+      couponDiscount,
       totalAmount: calculatedTotalAmount
     });
-    const orderCount = await Order.countDocuments();
-    const serialNumber = orderCount + 1; 
-    const orderNumber = generateOrderNumber(serialNumber);
-    console.log(`Generated Guest Order Number: ${orderNumber}`);
 
+    const orderCount = await Order.countDocuments();
+    const serialNumber = orderCount + 1; 
+    const orderNumber = generateOrderNumber(serialNumber);
+    console.log(`Generated Guest Order Number: ${orderNumber}`);
+
+    // ✅ CHANGE: কুপন ভ্যালিডেশন (গেস্ট ইউজারের জন্য)
+    let validatedCoupon = null;
+    let finalCouponDiscount = couponDiscount;
+
+    if (couponCode && couponDiscount > 0) {
+      try {
+        console.log("🔍 Validating coupon for guest:", couponCode);
+        const coupon = await Coupon.findOne({ 
+          code: couponCode.toUpperCase(), 
+          isActive: true 
+        });
+
+        if (coupon) {
+          console.log("✅ Coupon found for guest:", coupon.code);
+          
+          // গেস্ট ইউজারের জন্য ভ্যালিডেশন (perUserLimit skip করব)
+          if (!coupon.canUse) {
+            console.log("❌ Coupon cannot be used (expired/inactive)");
+            finalCouponDiscount = 0;
+          } else if (coupon.minOrderAmount && calculatedSubtotal < coupon.minOrderAmount) {
+            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${calculatedSubtotal}`);
+            finalCouponDiscount = 0;
+          } else {
+            validatedCoupon = coupon;
+            console.log("🎉 Coupon validated successfully for guest. Discount:", finalCouponDiscount);
+          }
+        } else {
+          console.log("❌ Coupon not found in database for guest");
+          finalCouponDiscount = 0;
+        }
+      } catch (couponError) {
+        console.error("❌ Coupon validation error for guest:", couponError);
+        finalCouponDiscount = 0;
+      }
+    }
 
     // Prepare billing address - handle both cases
     const finalBillingAddress =
@@ -404,7 +969,7 @@ export const createGuestOrder = async (req, res) => {
           sameAsShipping: false,
         };
 
-    // Create guest order
+    // ✅ CHANGE: Create guest order with coupon data
     const order = new Order({
       isGuestOrder: true,
       guestCustomerInfo: {
@@ -416,7 +981,7 @@ export const createGuestOrder = async (req, res) => {
       items: orderItems,
       subtotal: calculatedSubtotal,
       totalDiscount: Math.max(0, calculatedTotalDiscount), // Prevent negative values
-      shippingCost: dynamicShippingCost, // dynamic shipping cost added to filed
+      shippingCost: dynamicShippingCost,
       totalAmount: calculatedTotalAmount,
       shippingAddress: {
         fullName: shippingAddress.fullName || customerInfo.name,
@@ -430,8 +995,10 @@ export const createGuestOrder = async (req, res) => {
       },
       billingAddress: finalBillingAddress,
       paymentMethod,
+      couponCode: couponCode || null,
+      couponDiscount: finalCouponDiscount, // ✅ কুপন ডিসকাউন্ট যোগ করুন
       specialInstructions,
-      status: "pending", // confirm can be changed to pending
+      status: "pending",
       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
     });
 
@@ -439,27 +1006,38 @@ export const createGuestOrder = async (req, res) => {
 
     await order.save();
 
-try {
-  const io = getIo(); // <-- নিশ্চিত করুন যে getIo() ইমপোর্ট করা হয়েছে
-  const customerName = order.shippingAddress.fullName || 'a Guest Customer';
-  const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
-  
-  const notificationData = {
-    message: notificationMessage,
-    orderId: order._id.toString(),
-    orderNumber: order.orderNumber,
-    timestamp: new Date().toISOString(),
-    link: `/orders/${order._id}` 
-  }
-  
-  io.emit('newOrderNotification', notificationData); 
-  console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`); // <-- এই লগটি আপনার সার্ভার লগে আসা উচিত
+    // ✅ CHANGE: গেস্ট ইউজারের জন্য কুপন ইউসেজ ট্র্যাক করুন
+    if (validatedCoupon && finalCouponDiscount > 0) {
+      try {
+        await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+          $inc: { usedCount: 1 }
+          // গেস্ট ইউজারなので usersUsed-এ add করা যাবে না
+        });
+        console.log("✅ Guest coupon usage tracked:", validatedCoupon.code);
+      } catch (trackError) {
+        console.error("❌ Error tracking guest coupon usage:", trackError);
+      }
+    }
 
-} catch (socketError) {
-  console.error('[Socket.IO] Error emitting notification:', socketError.message);
-}
+    try {
+      const io = getIo();
+      const customerName = order.shippingAddress.fullName || 'a Guest Customer';
+      const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
+      
+      const notificationData = {
+        message: notificationMessage,
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString(),
+        link: `/orders/${order._id}` 
+      }
+      
+      io.emit('newOrderNotification', notificationData); 
+      console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
 
-
+    } catch (socketError) {
+      console.error('[Socket.IO] Error emitting notification:', socketError.message);
+    }
 
     // Send confirmation email using the new helper function
     try {
@@ -499,6 +1077,8 @@ try {
     });
   }
 };
+
+
 
 
 // ##########################################################
@@ -1308,6 +1888,202 @@ const recalculateOrderTotals = (items, shippingCost = 0) => {
 // ##########################################################
 // added this function for added oder from manualy by admin and executive
 // ##########################################################
+// export const createManualOrder = async (req, res) => {
+//   try {
+//     const {
+//       customerType, // "user" or "guest"
+//       userId, // for registered users
+//       guestCustomerInfo, // for guest orders
+//       items,
+//       shippingAddress,
+//       billingAddress,
+//       paymentMethod,
+//       shippingCost = 0,
+//       couponCode,
+//       couponDiscount = 0,
+//       specialInstructions = "",
+//       adminNote
+//     } = req.body;
+
+//     // Validate required fields
+//     if (!customerType || !items || !Array.isArray(items) || items.length === 0) {
+//       return res.status(400).json({ message: "Customer type and valid items are required" });
+//     }
+
+//     if (!shippingAddress || !shippingAddress.address || !shippingAddress.city) {
+//       return res.status(400).json({ message: "Valid shipping address is required" });
+//     }
+
+//     if (!paymentMethod) {
+//       return res.status(400).json({ message: "Payment method is required" });
+//     }
+
+//     // Validate guest customer info
+//     if (customerType === "guest") {
+//       if (!guestCustomerInfo || !guestCustomerInfo.name || !guestCustomerInfo.email || !guestCustomerInfo.phone) {
+//         return res.status(400).json({ 
+//           message: "Guest customer name, email, and phone are required" 
+//         });
+//       }
+//     }
+
+//     // Validate user order
+//     if (customerType === "user" && !userId) {
+//       return res.status(400).json({ message: "User ID is required for registered users" });
+//     }
+
+//     // Prepare order items with product validation
+//     const orderItems = [];
+//     let calculatedSubtotal = 0;
+//     let calculatedTotalDiscount = 0;
+
+//     for (const item of items) {
+//       const product = await Product.findById(item.productId);
+//       if (!product) {
+//         return res.status(400).json({ message: `Product not found: ${item.productId}` });
+//       }
+
+//       // Validate stock
+//       if (product.stock < item.quantity) {
+//         return res.status(400).json({ 
+//           message: `Insufficient stock for product: ${product.title}. Available: ${product.stock}, Requested: ${item.quantity}` 
+//         });
+//       }
+
+//       // Calculate prices
+//       const originalPrice = item.originalPrice || product.basePrice;
+//       const discountedPrice = item.discountedPrice || originalPrice;
+//       const totalOriginalPrice = originalPrice * item.quantity;
+//       const totalDiscountedPrice = discountedPrice * item.quantity;
+//       const itemDiscountAmount = totalOriginalPrice - totalDiscountedPrice;
+
+//       const orderItem = {
+//         productId: product._id,
+//         productTitle: item.productTitle || product.title,
+//         productImage: item.productImage || product.images[0]?.url || "/placeholder.svg?height=200&width=200",
+//         variantId: item.variantId || null,
+//         variantDetails: item.variantDetails || null,
+//         colorVariantId: item.colorVariantId || null,
+//         colorVariantDetails: item.colorVariantDetails || null,
+//         quantity: item.quantity,
+//         originalPrice,
+//         discountedPrice,
+//         discountPercentage: item.discountPercentage || 0,
+//         totalOriginalPrice,
+//         totalDiscountedPrice,
+//         discountAmount: Math.max(0, itemDiscountAmount),
+//       };
+
+//       orderItems.push(orderItem);
+//       calculatedSubtotal += totalDiscountedPrice;
+//       calculatedTotalDiscount += itemDiscountAmount;
+//     }
+
+//     // Calculate shipping cost
+//     const finalShippingCost = shippingCost === 0 ? 
+//       calculateShippingCost(calculatedSubtotal, shippingAddress.city) : 
+//       shippingCost;
+
+//     const totalAmount = calculatedSubtotal + finalShippingCost - couponDiscount;
+
+//     // Generate order number
+//     // const orderNumber = generateOrderNumber(customerType === "guest");
+
+
+//     const orderCount = await Order.countDocuments();
+//     const serialNumber = orderCount + 1; 
+//     const orderNumber = generateOrderNumber(serialNumber);
+//     console.log(`Generated Manual Order Number: ${orderNumber}`);
+
+
+//     // Prepare order data
+//     const orderData = {
+//       isGuestOrder: customerType === "guest",
+//       orderNumber,
+//       items: orderItems,
+//       subtotal: calculatedSubtotal,
+//       totalDiscount: Math.max(0, calculatedTotalDiscount),
+//       couponCode: couponCode || null,
+//       couponDiscount: couponDiscount || 0,
+//       shippingCost: finalShippingCost,
+//       totalAmount,
+//       shippingAddress,
+//       paymentMethod,
+//       specialInstructions,
+//       status: "confirmed",
+//       paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "paid",
+//       createdBy: req.user.id, // Track who created the order
+//       createdByRole: req.user.role
+//     };
+
+//     // Add user/guest specific data
+//     if (customerType === "user") {
+//       orderData.userId = userId;
+//     } else {
+//       orderData.guestCustomerInfo = guestCustomerInfo;
+//       orderData.billingAddress = billingAddress?.sameAsShipping !== false ? 
+//         { ...shippingAddress, sameAsShipping: true } : 
+//         { ...billingAddress, sameAsShipping: false };
+//     }
+
+//     // Add admin note if provided
+//     if (adminNote) {
+//       orderData.adminNotes = [{
+//         note: `Order created manually: ${adminNote}`,
+//         addedBy: req.user.id,
+//         addedAt: new Date(),
+//         role: req.user.role
+//       }];
+//     }
+
+//     // Create order
+//     const order = new Order(orderData);
+//     await order.save();
+
+//     // Update product stock
+//     await updateProductStock(orderItems);
+
+//     // Socket notification
+//     try {
+//       const io = getIo();
+//       const customerName = customerType === "user" ? 
+//         (shippingAddress.fullName || 'a Customer') : 
+//         (guestCustomerInfo.name || 'a Guest Customer');
+      
+//       const notificationMessage = `New Manual Order #${order.orderNumber} created by ${req.user.name} for ${customerName}`;
+      
+//       const notificationData = {
+//         message: notificationMessage,
+//         orderId: order._id.toString(),
+//         orderNumber: order.orderNumber,
+//         timestamp: new Date().toISOString(),
+//         link: `/orders/${order._id}`,
+//         createdBy: req.user.name
+//       };
+      
+//       io.emit('newOrderNotification', notificationData);
+//       console.log(`[Socket.IO] Emitted manual order notification for: ${order.orderNumber}`);
+//     } catch (socketError) {
+//       console.error('[Socket.IO] Error emitting notification:', socketError.message);
+//     }
+
+//     res.status(201).json({
+//       status: "success",
+//       message: "Manual order created successfully",
+//       data: { order },
+//     });
+
+//   } catch (error) {
+//     console.error("Create manual order error:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+//     });
+//   }
+// };
+
+
 export const createManualOrder = async (req, res) => {
   try {
     const {
@@ -1319,8 +2095,8 @@ export const createManualOrder = async (req, res) => {
       billingAddress,
       paymentMethod,
       shippingCost = 0,
-      couponCode,
-      couponDiscount = 0,
+      couponCode = null,
+      couponDiscount = 0, // ✅ কুপন ডিসকাউন্ট যোগ করুন
       specialInstructions = "",
       adminNote
     } = req.body;
@@ -1404,19 +2180,58 @@ export const createManualOrder = async (req, res) => {
       calculateShippingCost(calculatedSubtotal, shippingAddress.city) : 
       shippingCost;
 
-    const totalAmount = calculatedSubtotal + finalShippingCost - couponDiscount;
+    // ✅ CHANGE: কুপন ভ্যালিডেশন যোগ করুন
+    let finalCouponDiscount = 0;
+    let validatedCoupon = null;
+
+    if (couponCode && couponDiscount > 0) {
+      try {
+        console.log("🔍 Validating coupon for manual order:", couponCode);
+        const coupon = await Coupon.findOne({ 
+          code: couponCode.toUpperCase(), 
+          isActive: true 
+        });
+
+        if (coupon) {
+          console.log("✅ Coupon found for manual order:", coupon.code);
+          
+          // ভ্যালিডেশন চেক
+          if (!coupon.canUse) {
+            console.log("❌ Coupon cannot be used (expired/inactive)");
+          } else if (customerType === "user" && !coupon.canUserUse(userId)) {
+            console.log("❌ User cannot use this coupon (limit reached)");
+          } else if (coupon.minOrderAmount && calculatedSubtotal < coupon.minOrderAmount) {
+            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${calculatedSubtotal}`);
+          } else {
+            validatedCoupon = coupon;
+            finalCouponDiscount = couponDiscount;
+            console.log("🎉 Coupon validated successfully for manual order. Discount:", finalCouponDiscount);
+          }
+        } else {
+          console.log("❌ Coupon not found in database for manual order");
+        }
+      } catch (couponError) {
+        console.error("❌ Coupon validation error for manual order:", couponError);
+      }
+    }
+
+    // ✅ CHANGE: টোটাল ক্যালকুলেশনে কুপন ডিসকাউন্ট অ্যাপ্লাই করুন
+    const totalAmount = Math.max(calculatedSubtotal + finalShippingCost - finalCouponDiscount, 0);
+
+    console.log("💰 Manual Order Calculation WITH COUPON:", {
+      subtotal: calculatedSubtotal,
+      shippingCost: finalShippingCost,
+      couponDiscount: finalCouponDiscount,
+      totalAmount
+    });
 
     // Generate order number
-    // const orderNumber = generateOrderNumber(customerType === "guest");
-
-
     const orderCount = await Order.countDocuments();
-    const serialNumber = orderCount + 1; 
-    const orderNumber = generateOrderNumber(serialNumber);
+    const serialNumber = orderCount + 1; 
+    const orderNumber = generateOrderNumber(serialNumber);
     console.log(`Generated Manual Order Number: ${orderNumber}`);
 
-
-    // Prepare order data
+    // ✅ CHANGE: Create manual order with coupon data
     const orderData = {
       isGuestOrder: customerType === "guest",
       orderNumber,
@@ -1424,7 +2239,7 @@ export const createManualOrder = async (req, res) => {
       subtotal: calculatedSubtotal,
       totalDiscount: Math.max(0, calculatedTotalDiscount),
       couponCode: couponCode || null,
-      couponDiscount: couponDiscount || 0,
+      couponDiscount: finalCouponDiscount, // ✅ কুপন ডিসকাউন্ট যোগ করুন
       shippingCost: finalShippingCost,
       totalAmount,
       shippingAddress,
@@ -1459,6 +2274,19 @@ export const createManualOrder = async (req, res) => {
     // Create order
     const order = new Order(orderData);
     await order.save();
+
+    // ✅ CHANGE: কুপন ইউসেজ ট্র্যাক করুন
+    if (validatedCoupon && finalCouponDiscount > 0) {
+      try {
+        await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+          $inc: { usedCount: 1 },
+          $addToSet: { usersUsed: customerType === "user" ? userId : null }
+        });
+        console.log("✅ Manual order coupon usage tracked:", validatedCoupon.code);
+      } catch (trackError) {
+        console.error("❌ Error tracking manual order coupon usage:", trackError);
+      }
+    }
 
     // Update product stock
     await updateProductStock(orderItems);
@@ -1502,6 +2330,7 @@ export const createManualOrder = async (req, res) => {
     });
   }
 };
+
 
 // ##########################################################
 //  This is older version of cancel order function. Currently not using but have to keep for references in future. 
@@ -1885,6 +2714,107 @@ export const deleteOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete order error:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
+  }
+};
+
+
+
+
+
+// ##########################################################
+// added this function for dashboard top selling products
+// ##########################################################
+export const getTopSoldProducts = async (req, res) => {
+  try {
+    const topProducts = await Order.aggregate([
+      // 1. De-normalize the items array
+      { $unwind: "$items" },
+      // 2. Group by product ID and sum quantities
+      {
+        $group: {
+          _id: "$items.productId",
+          productTitle: { $first: "$items.productTitle" },
+          productImage: { $first: "$items.productImage" },
+          totalSold: { $sum: "$items.quantity" }
+        }
+      },
+      // 3. Sort by total sold
+      { $sort: { totalSold: -1 } },
+      // 4. Limit to top 10
+      { $limit: 10 },
+      // 5. (Optional) Lookup product details if needed (e.g., current stock)
+      {
+        $lookup: {
+          from: "products", // 'products' collection
+          localField: "_id",
+          foreignField: "_id",
+          as: "productDetails"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          productTitle: 1,
+          productImage: 1,
+          totalSold: 1,
+          slug: { $arrayElemAt: ["$productDetails.slug", 0] },
+          stock: { $arrayElemAt: ["$productDetails.stock", 0] }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        topProducts
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching top products:", error);
+    res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
+  }
+};
+
+
+// ##########################################################
+// added this function for dashboard campaign sales stats
+// ##########################################################
+export const getCampaignSalesStats = async (req, res) => {
+  try {
+    // Calculate stats for orders that used a coupon
+    const campaignStats = await Order.aggregate([
+      {
+        $match: {
+          couponCode: { $ne: null, $exists: true }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCampaignSales: { $sum: "$totalAmount" },
+          totalCouponDiscount: { $sum: "$couponDiscount" },
+          totalCampaignOrders: { $sum: 1 }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      status: "success",
+      data: campaignStats[0] || {
+        totalCampaignSales: 0,
+        totalCouponDiscount: 0,
+        totalCampaignOrders: 0
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching campaign stats:", error);
     res.status(500).json({ 
       message: "Internal server error", 
       error: error.message 

@@ -19,8 +19,11 @@ export const createBlog = async (req, res) => {
 export const getAllBlogs = async (req, res) => {
     try {
         // শুধুমাত্র প্রয়োজনীয় ফিল্ডগুলি আনা হচ্ছে (যেমন: BlogSection-এর জন্য)
-        const blogs = await Blog.find().select('blogTitle _id category readTime image author date').sort({ createdAt: -1 });
-        res.status(200).json(blogs);
+        const blogs = await Blog.find()
+            .select('blogTitle _id category readTime image author date createdAt') // <<< FIX HERE
+            .sort({ createdAt: -1 });
+            
+        res.status(200).json(blogs);
     } catch (err) {
         res.status(500).json({ 
             message: 'Error fetching blog posts list.', 

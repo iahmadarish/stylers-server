@@ -26,6 +26,18 @@ const BlogSchema = new mongoose.Schema({
         required: true 
     },
 
+author: {
+        type: String,
+        required: true, 
+        trim: true
+    },
+    category: {
+        type: String,
+        required: true, 
+        trim: true,
+        default: 'General' 
+    },
+
     // SEO Meta Fields
     metaTitle: { 
         type: String, 

@@ -39,6 +39,8 @@ import "./config/passport.js"
 import notificationRoutes from './routes/notification.routes.js';
 import promotionalHeader from './routes/promotionalCampaignRoutes.js';
 
+import permissionRoutes from './routes/permission.routes.js'
+
 // Middleware imports
 import { errorHandler } from "./middleware/error.middleware.js"
 import http from 'http';
@@ -203,6 +205,7 @@ app.use('/api/trending-offers', trendingOffersRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/admin/coupons", adminCouponRoutes); // Admin coupon management routes
+app.use('/api/permissions', permissionRoutes) // Admin coupon management routes
 
 
 // Health check route

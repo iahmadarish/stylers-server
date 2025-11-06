@@ -37,6 +37,35 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin", "executive"],
       default: "user",
     },
+
+    permissions: {
+      type: Map,
+      of: [String],
+      default: function () {
+        const defaultPermissions = {
+          user: {},
+          executive: {
+            products: ['view', 'create', 'update'],
+            orders: ['view', 'update'],
+            customers: ['view']
+          },
+          admin: {
+            products: ['view', 'create', 'update', 'delete'],
+            orders: ['view', 'create', 'update', 'delete'],
+            customers: ['view', 'create', 'update', 'delete'],
+            users: ['view', 'create', 'update', 'delete'],
+            analytics: ['view'],
+            settings: ['view', 'update']
+          }
+        };
+        return defaultPermissions[this.role] || {};
+      }
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
     isVerified: {
       type: Boolean,
       default: false,
@@ -110,6 +139,54 @@ userSchema.methods.generatePasswordResetToken = function () {
   this.resetPasswordExpires = Date.now() + 10 * 60 * 1000 // 10 minutes
 
   return resetToken
+}
+
+userSchema.methods.hasPermission = function(module, action) {
+  // Admin has all permissions
+  if (this.role === 'admin') {
+    return true
+  }
+  
+  const userPermissions = this.permissions || {}
+  const modulePermissions = userPermissions.get ? userPermissions.get(module) : userPermissions[module]
+  
+  return modulePermissions && modulePermissions.includes(action)
+}
+
+// ✅ NEW: Method to get all permissions as object
+userSchema.methods.getPermissions = function() {
+  const permissions = this.permissions || {}
+  
+  // Convert Map to object if needed
+  if (permissions instanceof Map) {
+    const result = {}
+    for (const [key, value] of permissions.entries()) {
+      result[key] = value
+    }
+    return result
+  }
+  
+  return permissions
+}
+
+
+userSchema.methods.toJSON = function() {
+  const userObject = this.toObject()
+  
+  // Convert Map to plain object for JSON response
+  if (userObject.permissions instanceof Map) {
+    userObject.permissions = Object.fromEntries(userObject.permissions.entries())
+  }
+  
+  return userObject
+}
+
+// ✅ NEW: Method to get permissions as object
+userSchema.methods.getPermissions = function() {
+  if (this.permissions instanceof Map) {
+    return Object.fromEntries(this.permissions.entries())
+  }
+  return this.permissions || {}
 }
 
 const User = mongoose.model("User", userSchema)

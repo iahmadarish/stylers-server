@@ -37,6 +37,7 @@ import blogRoutes from "./routes/blogRoutes.js"
 // import reviewRoutes from "./routes/review.routes.js"
 import "./config/passport.js"
 import notificationRoutes from './routes/notification.routes.js';
+import promotionalHeader from './routes/promotionalCampaignRoutes.js';
 
 // Middleware imports
 import { errorHandler } from "./middleware/error.middleware.js"
@@ -196,6 +197,7 @@ app.use("/api/stock/notifications", stockNotificationRoutes);
 app.use("/api/stock/reports", stockReportRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/hero-section', heroSectionRoutes);
+app.use('/api', promotionalHeader);
 app.use('/api/page-meta', pageMetaRoutes);
 app.use('/api/trending-offers', trendingOffersRoutes);
 app.use("/api/notifications", notificationRoutes);

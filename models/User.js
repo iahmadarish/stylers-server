@@ -45,17 +45,31 @@ const userSchema = new mongoose.Schema(
         const defaultPermissions = {
           user: {},
           executive: {
-            products: ['view', 'create', 'update'],
-            orders: ['view', 'update'],
-            customers: ['view']
+            dashboard: ['view', 'create', 'update', 'delete'],
+            products: ['view', 'create', 'update', 'delete'],
+            orders: ['view', 'create', 'update', 'delete'],
+            customers: ['view', 'create', 'update', 'delete'],
+             categories: ['view', 'create', 'update', 'delete'],
+             coupons: ['view', 'create', 'update', 'delete'],
+             'coupons-management': ['view', 'create', 'update', 'delete'],
+             campaigns: ['view', 'create', 'update', 'delete'],
+             settings: ['view', 'create', 'update', 'delete'],
+             blogs: ['view', 'create', 'update', 'delete'],
+             'store-management': ['view']
           },
           admin: {
             products: ['view', 'create', 'update', 'delete'],
             orders: ['view', 'create', 'update', 'delete'],
             customers: ['view', 'create', 'update', 'delete'],
             users: ['view', 'create', 'update', 'delete'],
-            analytics: ['view'],
-            settings: ['view', 'update']
+            campaigns: ['view', 'create', 'update', 'delete'],
+            blogs: ['view', 'create', 'update', 'delete'],
+            categories: ['view', 'create', 'update', 'delete'],
+            coupons: ['view', 'create', 'update', 'delete'],
+            'coupons-management': ['view', 'create', 'update', 'delete'],
+            dashboard: ['view'],
+            settings: ['view', 'update'],
+            'store-management': ['view', 'create', 'update', 'delete']
           }
         };
         return defaultPermissions[this.role] || {};

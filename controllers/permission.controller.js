@@ -4,6 +4,7 @@ import User from "../models/User.js"
 
 // Available modules and actions
 export const AVAILABLE_MODULES = {
+    DASHBOARD: 'dashboard',
   PRODUCTS: 'products',
   ORDERS: 'orders', 
   CUSTOMERS: 'customers',
@@ -13,7 +14,10 @@ export const AVAILABLE_MODULES = {
   CATEGORIES: 'categories',
   INVENTORY: 'inventory',
   CAMPAIGNS: 'campaigns',
-  BLOGS: 'blogs'
+  COUPONS: 'coupons',
+  COUPONS_MANAGEMENT: 'coupons-management',
+  BLOGS: 'blogs',
+  STORE_MANAGEMENT: 'store-management'
 }
 
 export const AVAILABLE_ACTIONS = {
@@ -41,6 +45,7 @@ export const updateUserPermissions = catchAsync(async (req, res, next) => {
 
   console.log("🔄 Updating permissions for user:", userId)
   console.log("New permissions:", permissions)
+   console.log("New permissions:", JSON.stringify(permissions, null, 2)); // ✅ Detailed log
 
   // Only admin can update permissions
   if (req.user.role !== 'admin') {

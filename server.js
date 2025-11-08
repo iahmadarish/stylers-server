@@ -40,11 +40,14 @@ import notificationRoutes from './routes/notification.routes.js';
 import promotionalHeader from './routes/promotionalCampaignRoutes.js';
 
 import permissionRoutes from './routes/permission.routes.js'
+import contactRoutes from './routes/contact.js';
+import quoteRoutes from './routes/quote.js';
 
 // Middleware imports
 import { errorHandler } from "./middleware/error.middleware.js"
 import http from 'http';
 import { initSocket } from "./utils/socket.js";
+
 // Initialize express app
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -206,7 +209,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/coupons", couponRoutes);
 app.use("/api/admin/coupons", adminCouponRoutes); // Admin coupon management routes
 app.use('/api/permissions', permissionRoutes) // Admin coupon management routes
-
+app.use('/api', contactRoutes);
+app.use('/api', quoteRoutes);
 
 // Health check route
 app.get("/", (req, res) => {

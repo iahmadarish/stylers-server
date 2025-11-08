@@ -275,6 +275,28 @@ export const sendOrderEmails = async (order, toEmail, isGuest = false) => {
     return { success: overallSuccess };
 };
 
+
+const getBaseUrl = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://paarel.com';
+  } else if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'staging') {
+    return 'https://staging.paarel.com';
+  } else {
+    return 'https://paarel.com'; // fallback
+  }
+};
+
+// ✅ Get tracking URL based on environment and user type
+const getTrackingUrl = (orderNumber, isGuest = false) => {
+  const baseUrl = getBaseUrl();
+  
+  if (isGuest) {
+    return `${baseUrl}/track-order?orderNumber=${orderNumber}`;
+  } else {
+    return `${baseUrl}/profile`;
+  }
+};
+
 export const generateOrderConfirmationEmail = (order, isGuest = false, customerName) => {
     const customerEmail = isGuest
         ? order.guestCustomerInfo.email
@@ -285,9 +307,8 @@ export const generateOrderConfirmationEmail = (order, isGuest = false, customerN
     const orderAmount = order.totalAmount.toLocaleString('en-US', { style: 'currency', currency: 'BDT' });
     const paymentMethod = order.paymentMethod === "cash_on_delivery" ? "Cash on Delivery" : "Paid Online";
 
-    const trackLink = isGuest
-        ? `https://paarel.com/track-order?orderNumber=${orderNumber}`
-        : "https://paarel.com/profile";
+    const trackLink = getTrackingUrl(orderNumber, isGuest);
+  const baseUrl = getBaseUrl();
 
     return `
   <!DOCTYPE html>
@@ -512,7 +533,7 @@ export const generateOrderConfirmationEmail = (order, isGuest = false, customerN
                 <div class="social-links">
                     <a href="https://facebook.com/paarelofficial" target="_blank">Facebook</a>
                     <a href="https://instagram.com/parrel.official" target="_blank">Instagram</a>
-                    <a href="https://paarel.com" target="_blank">Website</a>
+                    <a href="${baseUrl}" target="_blank">Website</a>
                 </div>
                 <div class="copyright">
                     &copy; ${new Date().getFullYear()} Paarel. All rights reserved.

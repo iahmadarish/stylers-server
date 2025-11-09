@@ -483,7 +483,180 @@ productSchema.pre("save", function (next) {
   next()
 })
 
+
+
+
 // ✅ UPDATED: Enhanced pre-save hook with dual discount system
+// updateing for variant price caculate with having specific variant custom price. 
+// productSchema.pre("save", async function (next) {
+//   console.log("=== PRE-SAVE HOOK TRIGGERED ===")
+
+//   // Generate slug from title
+//   if (this.isModified("title") || this.isNew) {
+//     let baseSlug = slugify(this.title, { lower: true });
+//     let finalSlug = baseSlug;
+//     let counter = 1;
+
+//     // Check if slug already exists
+//     while (true) {
+//       const existingProduct = await mongoose.models.Product.findOne({ slug: finalSlug });
+//       if (!existingProduct || (this._id && existingProduct._id.equals(this._id))) {
+//         break;
+//       }
+//       finalSlug = `${baseSlug}-${counter}`;
+//       counter++;
+//     }
+
+//     this.slug = finalSlug;
+//     console.log(`Generated slug: ${this.slug}`);
+//   }
+
+//   // ✅ UPDATED: Calculate main product price with campaign priority
+//   if (
+//     this.isModified("basePrice") ||
+//     this.isModified("discountType") ||
+//     this.isModified("discountPercentage") ||
+//     this.isModified("discountAmount") ||
+//     this.isModified("discountStartTime") ||
+//     this.isModified("discountEndTime") ||
+//     this.isModified("campaignDiscountActive") ||
+//     this.isModified("campaignDiscountPercentage") ||
+//     this.isModified("campaignDiscountAmount") ||
+//     this.isNew
+//   ) {
+//     console.log("Calculating main product price...")
+//     console.log(`Campaign Active: ${this.campaignDiscountActive}, Regular Discount: ${this.discountPercentage}%`)
+    
+//     const now = new Date()
+//     let finalPrice = this.basePrice
+    
+//     // ✅ Priority 1: Check if campaign discount is active and valid
+//     if (this.campaignDiscountActive && 
+//         this.campaignDiscountStartTime && 
+//         this.campaignDiscountEndTime &&
+//         now >= this.campaignDiscountStartTime && 
+//         now <= this.campaignDiscountEndTime) {
+      
+//       if (this.campaignDiscountType === "percentage" && this.campaignDiscountPercentage > 0) {
+//         const discountAmount = (this.basePrice * this.campaignDiscountPercentage) / 100
+//         finalPrice = Math.max(0, this.basePrice - discountAmount)
+//         console.log(`Applied campaign percentage discount: ${this.basePrice} - ${discountAmount} = ${finalPrice}`)
+//       } else if (this.campaignDiscountType === "fixed" && this.campaignDiscountAmount > 0) {
+//         finalPrice = Math.max(0, this.basePrice - this.campaignDiscountAmount)
+//         console.log(`Applied campaign fixed discount: ${this.basePrice} - ${this.campaignDiscountAmount} = ${finalPrice}`)
+//       }
+//     }
+//     // ✅ Priority 2: Check if regular discount is active and valid (ONLY when campaign is not active)
+//     else if (
+//       (this.discountPercentage > 0 || this.discountAmount > 0) &&
+//       this.discountStartTime &&
+//       this.discountEndTime &&
+//       now >= this.discountStartTime &&
+//       now <= this.discountEndTime
+//     ) {
+//       if (this.discountType === "percentage" && this.discountPercentage > 0) {
+//         const discountAmount = (this.basePrice * this.discountPercentage) / 100
+//         finalPrice = Math.max(0, this.basePrice - discountAmount)
+//         console.log(`Applied regular percentage discount: ${this.basePrice} - ${discountAmount} = ${finalPrice}`)
+//       } else if (this.discountType === "fixed" && this.discountAmount > 0) {
+//         finalPrice = Math.max(0, this.basePrice - this.discountAmount)
+//         console.log(`Applied regular fixed discount: ${this.basePrice} - ${this.discountAmount} = ${finalPrice}`)
+//       }
+//     } else {
+//       finalPrice = this.basePrice
+//       console.log(`No active discount, using base price: ${finalPrice}`)
+//     }
+    
+//     this.price = finalPrice
+//   }
+
+//   // ✅ UPDATED: Calculate variant prices with campaign priority
+//   if (this.variants && this.variants.length > 0 && (this.isModified("variants") || this.isNew)) {
+//     console.log("Calculating variant prices...")
+
+//     this.variants.forEach((variant, index) => {
+//       // Generate product code if not provided
+//       if (!variant.productCode) {
+//         variant.productCode = generateProductCode()
+//       }
+
+//       // Determine base price for variant
+//       const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : this.basePrice
+//       let variantFinalPrice = variantBasePrice
+//       const now = new Date()
+
+//       // ✅ Priority 1: Check if variant campaign discount is active
+//       if (variant.campaignDiscountActive && 
+//           variant.campaignDiscountStartTime && 
+//           variant.campaignDiscountEndTime &&
+//           now >= variant.campaignDiscountStartTime && 
+//           now <= variant.campaignDiscountEndTime) {
+        
+//         if (variant.campaignDiscountType === "percentage" && variant.campaignDiscountPercentage > 0) {
+//           const discountAmount = (variantBasePrice * variant.campaignDiscountPercentage) / 100
+//           variantFinalPrice = variantBasePrice - discountAmount
+//         } else if (variant.campaignDiscountType === "fixed" && variant.campaignDiscountAmount > 0) {
+//           variantFinalPrice = Math.max(0, variantBasePrice - variant.campaignDiscountAmount)
+//         }
+//       }
+//       // ✅ Priority 2: Check variant-specific discount
+//       else if (variant.discountPercentage > 0 || variant.discountAmount > 0) {
+//         if (variant.discountType === "percentage" && variant.discountPercentage > 0 &&
+//             variant.discountStartTime && variant.discountEndTime &&
+//             now >= variant.discountStartTime && now <= variant.discountEndTime) {
+//           const discountAmount = (variantBasePrice * variant.discountPercentage) / 100
+//           variantFinalPrice = variantBasePrice - discountAmount
+//         } else if (variant.discountType === "fixed" && variant.discountAmount > 0 &&
+//                   variant.discountStartTime && variant.discountEndTime &&
+//                   now >= variant.discountStartTime && now <= variant.discountEndTime) {
+//           variantFinalPrice = Math.max(0, variantBasePrice - variant.discountAmount)
+//         }
+//       }
+//       // ✅ Priority 3: Fall back to product-level campaign discount
+//       else if (this.campaignDiscountActive && 
+//                this.campaignDiscountStartTime && 
+//                this.campaignDiscountEndTime &&
+//                now >= this.campaignDiscountStartTime && 
+//                now <= this.campaignDiscountEndTime &&
+//                variant.basePrice === undefined) {
+        
+//         if (this.campaignDiscountType === "percentage" && this.campaignDiscountPercentage > 0) {
+//           const discountAmount = (variantBasePrice * this.campaignDiscountPercentage) / 100
+//           variantFinalPrice = variantBasePrice - discountAmount
+//         } else if (this.campaignDiscountType === "fixed" && this.campaignDiscountAmount > 0) {
+//           variantFinalPrice = Math.max(0, variantBasePrice - this.campaignDiscountAmount)
+//         }
+//       }
+//       // ✅ Priority 4: Fall back to product-level regular discount
+//       else if ((this.discountPercentage > 0 || this.discountAmount > 0) &&
+//                this.discountStartTime && this.discountEndTime &&
+//                now >= this.discountStartTime && now <= this.discountEndTime &&
+//                variant.basePrice === undefined) {
+        
+//         if (this.discountType === "percentage" && this.discountPercentage > 0) {
+//           const discountAmount = (variantBasePrice * this.discountPercentage) / 100
+//           variantFinalPrice = variantBasePrice - discountAmount
+//         } else if (this.discountType === "fixed" && this.discountAmount > 0) {
+//           variantFinalPrice = Math.max(0, variantBasePrice - this.discountAmount)
+//         }
+//       }
+
+//       variant.price = variantFinalPrice
+//       console.log(`Variant ${index} final price: ${variant.price}`)
+//     })
+
+//     // Calculate total stock from variants
+//     this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
+//     console.log(`Total stock calculated: ${this.stock}`)
+//   }
+
+//   // Update stock status
+//   this.updateStockStatus()
+//   console.log("=== PRE-SAVE HOOK COMPLETED ===")
+//   next()
+// })
+
+
 productSchema.pre("save", async function (next) {
   console.log("=== PRE-SAVE HOOK TRIGGERED ===")
 
@@ -566,91 +739,101 @@ productSchema.pre("save", async function (next) {
     this.price = finalPrice
   }
 
-  // ✅ UPDATED: Calculate variant prices with campaign priority
+  // ✅ FIXED: Variant price calculation - prioritize variant-specific discounts
   if (this.variants && this.variants.length > 0 && (this.isModified("variants") || this.isNew)) {
-    console.log("Calculating variant prices...")
+  console.log("Calculating variant prices...")
 
-    this.variants.forEach((variant, index) => {
-      // Generate product code if not provided
-      if (!variant.productCode) {
-        variant.productCode = generateProductCode()
-      }
+  this.variants.forEach((variant, index) => {
+    // Generate product code if not provided
+    if (!variant.productCode) {
+      variant.productCode = generateProductCode()
+    }
 
-      // Determine base price for variant
-      const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : this.basePrice
-      let variantFinalPrice = variantBasePrice
-      const now = new Date()
+    // Determine base price for variant
+    const variantBasePrice = variant.basePrice !== undefined ? variant.basePrice : this.basePrice
+    let variantFinalPrice = variantBasePrice
+    const now = new Date()
 
-      // ✅ Priority 1: Check if variant campaign discount is active
-      if (variant.campaignDiscountActive && 
-          variant.campaignDiscountStartTime && 
-          variant.campaignDiscountEndTime &&
-          now >= variant.campaignDiscountStartTime && 
-          now <= variant.campaignDiscountEndTime) {
-        
-        if (variant.campaignDiscountType === "percentage" && variant.campaignDiscountPercentage > 0) {
-          const discountAmount = (variantBasePrice * variant.campaignDiscountPercentage) / 100
-          variantFinalPrice = variantBasePrice - discountAmount
-        } else if (variant.campaignDiscountType === "fixed" && variant.campaignDiscountAmount > 0) {
-          variantFinalPrice = Math.max(0, variantBasePrice - variant.campaignDiscountAmount)
-        }
-      }
-      // ✅ Priority 2: Check variant-specific discount
-      else if (variant.discountPercentage > 0 || variant.discountAmount > 0) {
-        if (variant.discountType === "percentage" && variant.discountPercentage > 0 &&
-            variant.discountStartTime && variant.discountEndTime &&
-            now >= variant.discountStartTime && now <= variant.discountEndTime) {
+    console.log(`Variant ${index} - Base: ${variantBasePrice}, Custom Base: ${variant.basePrice}`)
+    console.log(`Variant discount - Type: ${variant.discountType}, Percentage: ${variant.discountPercentage}, Amount: ${variant.discountAmount}`)
+
+    // ✅ FIXED: Priority 1: Check variant-specific discount FIRST
+    if ((variant.discountPercentage > 0 || variant.discountAmount > 0) && 
+        variant.discountStartTime && variant.discountEndTime) {
+      
+      const variantStartTime = new Date(variant.discountStartTime)
+      const variantEndTime = new Date(variant.discountEndTime)
+      const isVariantDiscountActive = now >= variantStartTime && now <= variantEndTime
+      
+      console.log(`Variant ${index} discount active: ${isVariantDiscountActive}, Start: ${variantStartTime}, End: ${variantEndTime}, Now: ${now}`)
+
+      if (isVariantDiscountActive) {
+        if (variant.discountType === "percentage" && variant.discountPercentage > 0) {
           const discountAmount = (variantBasePrice * variant.discountPercentage) / 100
-          variantFinalPrice = variantBasePrice - discountAmount
-        } else if (variant.discountType === "fixed" && variant.discountAmount > 0 &&
-                  variant.discountStartTime && variant.discountEndTime &&
-                  now >= variant.discountStartTime && now <= variant.discountEndTime) {
+          variantFinalPrice = Math.max(0, variantBasePrice - discountAmount)
+          console.log(`✅ Applied variant-specific percentage discount: ${variantBasePrice} - ${discountAmount} = ${variantFinalPrice}`)
+        } else if (variant.discountType === "fixed" && variant.discountAmount > 0) {
           variantFinalPrice = Math.max(0, variantBasePrice - variant.discountAmount)
+          console.log(`✅ Applied variant-specific fixed discount: ${variantBasePrice} - ${variant.discountAmount} = ${variantFinalPrice}`)
         }
       }
-      // ✅ Priority 3: Fall back to product-level campaign discount
-      else if (this.campaignDiscountActive && 
-               this.campaignDiscountStartTime && 
-               this.campaignDiscountEndTime &&
-               now >= this.campaignDiscountStartTime && 
-               now <= this.campaignDiscountEndTime &&
-               variant.basePrice === undefined) {
-        
-        if (this.campaignDiscountType === "percentage" && this.campaignDiscountPercentage > 0) {
-          const discountAmount = (variantBasePrice * this.campaignDiscountPercentage) / 100
-          variantFinalPrice = variantBasePrice - discountAmount
-        } else if (this.campaignDiscountType === "fixed" && this.campaignDiscountAmount > 0) {
-          variantFinalPrice = Math.max(0, variantBasePrice - this.campaignDiscountAmount)
-        }
+    }
+    // ✅ FIXED: Priority 2: Check product campaign discount
+    else if (this.campaignDiscountActive && 
+             this.campaignDiscountStartTime && 
+             this.campaignDiscountEndTime &&
+             now >= this.campaignDiscountStartTime && 
+             now <= this.campaignDiscountEndTime) {
+      
+      if (this.campaignDiscountType === "percentage" && this.campaignDiscountPercentage > 0) {
+        const discountAmount = (variantBasePrice * this.campaignDiscountPercentage) / 100
+        variantFinalPrice = Math.max(0, variantBasePrice - discountAmount)
+        console.log(`Applied product campaign discount to variant: ${variantBasePrice} - ${discountAmount} = ${variantFinalPrice}`)
+      } else if (this.campaignDiscountType === "fixed" && this.campaignDiscountAmount > 0) {
+        variantFinalPrice = Math.max(0, variantBasePrice - this.campaignDiscountAmount)
+        console.log(`Applied product campaign discount to variant: ${variantBasePrice} - ${this.campaignDiscountAmount} = ${variantFinalPrice}`)
       }
-      // ✅ Priority 4: Fall back to product-level regular discount
-      else if ((this.discountPercentage > 0 || this.discountAmount > 0) &&
-               this.discountStartTime && this.discountEndTime &&
-               now >= this.discountStartTime && now <= this.discountEndTime &&
-               variant.basePrice === undefined) {
-        
-        if (this.discountType === "percentage" && this.discountPercentage > 0) {
-          const discountAmount = (variantBasePrice * this.discountPercentage) / 100
-          variantFinalPrice = variantBasePrice - discountAmount
-        } else if (this.discountType === "fixed" && this.discountAmount > 0) {
-          variantFinalPrice = Math.max(0, variantBasePrice - this.discountAmount)
-        }
+    }
+    // ✅ FIXED: Priority 3: Check product regular discount
+    else if ((this.discountPercentage > 0 || this.discountAmount > 0) &&
+             this.discountStartTime && this.discountEndTime &&
+             now >= this.discountStartTime && now <= this.discountEndTime) {
+      
+      if (this.discountType === "percentage" && this.discountPercentage > 0) {
+        const discountAmount = (variantBasePrice * this.discountPercentage) / 100
+        variantFinalPrice = Math.max(0, variantBasePrice - discountAmount)
+        console.log(`Applied product regular discount to variant: ${variantBasePrice} - ${discountAmount} = ${variantFinalPrice}`)
+      } else if (this.discountType === "fixed" && this.discountAmount > 0) {
+        variantFinalPrice = Math.max(0, variantBasePrice - this.discountAmount)
+        console.log(`Applied product regular discount to variant: ${variantBasePrice} - ${this.discountAmount} = ${variantFinalPrice}`)
       }
+    }
+    // ✅ No discount applied
+    else {
+      variantFinalPrice = variantBasePrice
+      console.log(`No discount applied to variant, using base price: ${variantFinalPrice}`)
+    }
 
-      variant.price = variantFinalPrice
-      console.log(`Variant ${index} final price: ${variant.price}`)
-    })
+    variant.price = variantFinalPrice
+    console.log(`Variant ${index} final price: ${variant.price}`)
+  })
 
-    // Calculate total stock from variants
-    this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
-    console.log(`Total stock calculated: ${this.stock}`)
-  }
+  // Calculate total stock from variants
+  this.stock = this.variants.reduce((total, variant) => total + (variant.stock || 0), 0)
+  console.log(`Total stock calculated: ${this.stock}`)
+}
 
   // Update stock status
   this.updateStockStatus()
   console.log("=== PRE-SAVE HOOK COMPLETED ===")
   next()
 })
+
+// new added in 9 octobor from home work to resolve the product variant specific price updateing. 
+
+
+
+
 
 // ✅ UPDATED: Method to check if discount is currently active
 productSchema.methods.isDiscountActive = function () {
@@ -983,12 +1166,63 @@ productSchema.pre("validate", function (next) {
     }
     combinations.add(combination)
   }
+
+  const productCodes = new Set()
+  for (let i = 0; i < this.variants.length; i++) {
+    const variant = this.variants[i]
+    if (variant.productCode) {
+      if (productCodes.has(variant.productCode)) {
+        this.invalidate(`variants.${i}.productCode`, `Duplicate product code in same product: ${variant.productCode}`)
+      }
+      productCodes.add(variant.productCode)
+    }
+  }
+
+
   // Ensure all variant color codes exist in images
   const imageColorCodes = new Set(this.images.map((img) => img.colorCode))
   for (let i = 0; i < this.variants.length; i++) {
     const variant = this.variants[i]
     if (!imageColorCodes.has(variant.colorCode)) {
       this.invalidate(`variants.${i}.colorCode`, `Color code ${variant.colorCode} must have corresponding images`)
+    }
+  }
+  next()
+})
+
+productSchema.pre("save", async function (next) {
+  if (this.isModified("variants") || this.isNew) {
+    const productCodes = []
+    
+    // Collect all product codes from variants
+    this.variants.forEach(variant => {
+      if (variant.productCode) {
+        productCodes.push(variant.productCode)
+      }
+    })
+    
+    // Check for duplicates across all products
+    if (productCodes.length > 0) {
+      const existingProducts = await mongoose.models.Product.find({
+        _id: { $ne: this._id },
+        'variants.productCode': { $in: productCodes }
+      })
+      
+      if (existingProducts.length > 0) {
+        const duplicateCodes = []
+        existingProducts.forEach(product => {
+          product.variants.forEach(variant => {
+            if (productCodes.includes(variant.productCode)) {
+              duplicateCodes.push(variant.productCode)
+            }
+          })
+        })
+        
+        if (duplicateCodes.length > 0) {
+          const error = new Error(`Product codes already exist in other products: ${duplicateCodes.join(', ')}`)
+          return next(error)
+        }
+      }
     }
   }
   next()

@@ -327,7 +327,7 @@ export const createGuestOrder = async (req, res) => {
     const calculateShippingCost = (subtotal, city) => {
       if (subtotal >= 4000) return 0;
       const isDhaka = city && city.toLowerCase().includes("dhaka");
-      return isDhaka ? 70 : 130;
+      return isDhaka ? 11 : 11;
     };
 
     const dynamicShippingCost = calculateShippingCost(calculatedSubtotal, shippingAddress.city);

@@ -161,23 +161,25 @@ cartSchema.methods.refreshPrices = async function () {
   for (let [index, item] of this.items.entries()) {
     try {
       const product = await Product.findById(item.productId)
-      if (!product) {
-        console.warn(`⚠️ Product not found for item ${index}:`, item.productId)
-        continue
-      }
+      if (!product) continue
 
-      if (!product.isActive) {
-        console.warn(`⚠️ Product is inactive:`, product.title)
-        // You can choose to remove inactive products or keep them
-        continue
-      }
+      if (!product.isActive) continue
 
       let variant = null
       if (item.variantId && product.variants && product.variants.length > 0) {
         variant = product.variants.id(item.variantId)
-        if (!variant) {
-          console.warn(`⚠️ Variant not found:`, item.variantId)
-        }
+      }
+
+      // ✅ CHECK IF ITEM WAS ADDED WITH FORCED DISCOUNT
+      // Jodi item recently add hoye thake (within 1 hour) and wasDiscountActive true, 
+      // tahole client-calculated price preserve korun
+      const itemAddedTime = item.addedAt ? new Date(item.addedAt) : new Date()
+      const timeSinceAdded = now - itemAddedTime
+      const isRecentlyAdded = timeSinceAdded < (60 * 60 * 1000) // 1 hour
+
+      if (isRecentlyAdded && item.wasDiscountActive) {
+        console.log(`🔒 Preserving forced discount for recently added item: "${product.title}"`)
+        continue // Skip price refresh for this item
       }
 
       // Store old prices for comparison
@@ -185,40 +187,40 @@ cartSchema.methods.refreshPrices = async function () {
       const oldWasDiscountActive = item.wasDiscountActive
 
       // Calculate current pricing
-      const { currentPrice, currentBasePrice, currentDiscount, discountActive, discountType } = 
-        await this.calculateCurrentItemPrice(product, variant, now)
+      const currentPricing = this.calculateCurrentPrice(product, variant, now)
 
       // Check if prices changed
       const priceChanged = 
-        oldDiscountedPrice !== currentPrice ||
-        oldWasDiscountActive !== discountActive
+        oldDiscountedPrice !== currentPricing.discountedPrice ||
+        oldWasDiscountActive !== currentPricing.isCampaignActive
 
       if (priceChanged) {
         updatedItemsCount++
 
         // Track campaign ended items
-        if (oldWasDiscountActive && !discountActive) {
+        if (oldWasDiscountActive && !currentPricing.isCampaignActive) {
           campaignEndedItems.push(product.title)
         }
 
         console.log(`💰 Price updated for "${product.title}":`, {
           oldPrice: oldDiscountedPrice,
-          newPrice: currentPrice,
+          newPrice: currentPricing.discountedPrice,
           oldDiscountActive: oldWasDiscountActive,
-          newDiscountActive: discountActive,
+          newDiscountActive: currentPricing.isCampaignActive,
           variant: variant?.size
         })
 
         // Update item with new prices
-        item.basePrice = currentBasePrice
-        item.originalPrice = currentBasePrice
-        item.discountedPrice = currentPrice
-        item.discountPercentage = currentDiscount
-        item.discountAmount = currentBasePrice - currentPrice
-        item.wasDiscountActive = discountActive
-        item.totalPrice = Math.round(currentPrice * item.quantity)
+        item.basePrice = currentPricing.originalPrice
+        item.originalPrice = currentPricing.originalPrice
+        item.discountedPrice = currentPricing.discountedPrice
+        item.discountPercentage = currentPricing.discountPercentage
+        item.discountAmount = currentPricing.discountAmount
+        item.discountType = currentPricing.discountType
+        item.wasDiscountActive = currentPricing.isCampaignActive
+        item.totalPrice = Math.round(currentPricing.discountedPrice * item.quantity)
 
-        // Update discount timing if available
+        // Update discount timing
         if (variant) {
           item.discountStartTime = variant.discountStartTime
           item.discountEndTime = variant.discountEndTime
@@ -230,7 +232,6 @@ cartSchema.methods.refreshPrices = async function () {
 
     } catch (error) {
       console.error(`❌ Error refreshing price for item ${index}:`, error)
-      // Continue with other items even if one fails
     }
   }
 
@@ -250,6 +251,94 @@ cartSchema.methods.refreshPrices = async function () {
     totalDiscountAmount: this.totalDiscountAmount
   }
 }
+
+// ✅ ADD THIS calculateCurrentPrice METHOD TO CART SCHEMA
+cartSchema.methods.calculateCurrentPrice = function(product, variant, now = new Date()) {
+  // Helper function to round prices
+  const roundPrice = (price) => {
+    if (typeof price !== 'number' || isNaN(price)) return 0;
+    const numPrice = Number(price);
+    const fractionalPart = Math.abs((numPrice * 100) % 100) / 100;
+    return fractionalPart >= 0.50 ? Math.ceil(numPrice) : Math.floor(numPrice);
+  };
+
+  // Get original price
+  let originalPrice = Number(
+    variant?.basePrice || product?.basePrice || variant?.price || product?.price || 0
+  );
+
+  // Check if discount is currently active based on time
+  const isDiscountTimeActive = (entity) => {
+    if (!entity) return false;
+    
+    // Check time-based discount first
+    if (entity.discountStartTime && entity.discountEndTime) {
+      const startTime = new Date(entity.discountStartTime);
+      const endTime = new Date(entity.discountEndTime);
+      const isTimeActive = now >= startTime && now <= endTime;
+      
+      // If time constraints exist, only return true if within time
+      if (isTimeActive) {
+        return (entity.discountPercentage > 0 || entity.discountAmount > 0);
+      }
+      return false;
+    }
+    
+    // If no time constraints, discount is considered active if values exist
+    return (entity.discountPercentage > 0 || entity.discountAmount > 0);
+  };
+
+  const discountActive = variant ? 
+    isDiscountTimeActive(variant) : 
+    isDiscountTimeActive(product);
+
+  let discountedPrice = originalPrice;
+  let discountPercentage = 0;
+  let discountAmount = 0;
+  let discountType = "none";
+
+  if (discountActive) {
+    const entity = variant || product;
+    discountType = entity.discountType || "percentage";
+    
+    if (discountType === "percentage") {
+      discountPercentage = Number(entity.discountPercentage || 0);
+      discountAmount = (originalPrice * discountPercentage) / 100;
+      discountedPrice = Math.max(0.01, originalPrice - discountAmount);
+    } else if (discountType === "fixed") {
+      discountAmount = Number(entity.discountAmount || 0);
+      discountedPrice = Math.max(0.01, originalPrice - discountAmount);
+      discountPercentage = originalPrice > 0 ? 
+        Math.round((discountAmount / originalPrice) * 100) : 0;
+    }
+  }
+
+  // Apply rounding
+  originalPrice = roundPrice(originalPrice);
+  discountedPrice = roundPrice(discountedPrice);
+  discountAmount = roundPrice(discountAmount);
+
+  // Ensure valid prices
+  originalPrice = Math.max(originalPrice, 0.01);
+  discountedPrice = Math.max(discountedPrice, 0.01);
+
+  // Ensure discounted price doesn't exceed original price
+  if (discountedPrice > originalPrice) {
+    discountedPrice = originalPrice;
+    discountPercentage = 0;
+    discountAmount = 0;
+    discountType = "none";
+  }
+
+  return {
+    originalPrice,
+    discountedPrice,
+    discountPercentage,
+    discountAmount,
+    discountType,
+    isCampaignActive: discountActive
+  };
+};
 
 
 cartSchema.methods.calculateCurrentItemPrice = async function (product, variant, currentTime = new Date()) {

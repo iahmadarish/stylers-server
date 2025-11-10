@@ -137,84 +137,139 @@ export const addToCart = async (req, res) => {
     let discountEndTime = null;
 
     // If client sent calculated prices and forceDiscount is true, use them
-    if (forceDiscount && discountedPrice !== undefined && basePrice !== undefined) {
-      console.log("💰 Using client-calculated prices with forced discount");
-      
-      finalBasePrice = Number(basePrice) || 0;
-      finalDiscountedPrice = Number(discountedPrice) || 0;
-      finalDiscountPercentage = Number(discountPercentage) || 0;
-      finalDiscountAmount = Number(discountAmount) || 0;
-      
-      // Validate prices
-      if (finalBasePrice <= 0 || finalDiscountedPrice <= 0) {
-        return res.status(400).json({ 
-          success: false,
-          message: "Invalid price values provided" 
-        })
-      }
+    const isVariantDiscountActive = (variant) => {
+  if (!variant) return false;
+  
+  const now = new Date();
+  
+  // Check time-based discount
+  if (variant.discountStartTime && variant.discountEndTime) {
+    const startTime = new Date(variant.discountStartTime);
+    const endTime = new Date(variant.discountEndTime);
+    if (now >= startTime && now <= endTime) {
+      return true;
+    }
+    return false; // Time period exists but not active
+  }
+  
+  // Check if discount exists without time constraints
+  return (variant.discountPercentage > 0 || variant.discountAmount > 0);
+};
 
-      discountActive = finalDiscountPercentage > 0 || finalDiscountAmount > 0;
-      
-      // Set discount timing based on product/variant
-      if (variantId && variant) {
-        discountStartTime = variant.discountStartTime;
-        discountEndTime = variant.discountEndTime;
+const isProductDiscountActive = (product) => {
+  const now = new Date();
+  
+  // Check time-based discount
+  if (product.discountStartTime && product.discountEndTime) {
+    const startTime = new Date(product.discountStartTime);
+    const endTime = new Date(product.discountEndTime);
+    if (now >= startTime && now <= endTime) {
+      return true;
+    }
+    return false; // Time period exists but not active
+  }
+  
+  // Check if discount exists without time constraints
+  return (product.discountPercentage > 0 || product.discountAmount > 0);
+};
+
+// If client sent calculated prices and forceDiscount is true, use them
+if (forceDiscount && discountedPrice !== undefined && basePrice !== undefined) {
+  console.log("💰 Using client-calculated prices with forced discount");
+  
+  finalBasePrice = Number(basePrice) || 0;
+  finalDiscountedPrice = Number(discountedPrice) || 0;
+  finalDiscountPercentage = Number(discountPercentage) || 0;
+  finalDiscountAmount = Number(discountAmount) || 0;
+  
+  // Validate prices
+  if (finalBasePrice <= 0 || finalDiscountedPrice <= 0) {
+    return res.status(400).json({ 
+      success: false,
+      message: "Invalid price values provided" 
+    })
+  }
+
+  discountActive = finalDiscountPercentage > 0 || finalDiscountAmount > 0;
+  
+  // Set discount timing based on product/variant
+  if (variantId && variant) {
+    discountStartTime = variant.discountStartTime;
+    discountEndTime = variant.discountEndTime;
+  } else {
+    discountStartTime = product.discountStartTime;
+    discountEndTime = product.discountEndTime;
+  }
+} else {
+  // ✅ FALLBACK TO SERVER-SIDE PRICE CALCULATION
+  console.log("💰 Using server-calculated prices");
+  
+  if (variantId && variant) {
+    // Use variant pricing
+    finalBasePrice = Number(variant.basePrice || product.basePrice || variant.price || product.price || 0);
+    finalDiscountedPrice = Number(variant.price || product.price || 0);
+    
+    // Check if discount is active
+    discountActive = isVariantDiscountActive(variant);
+    
+    // If discount is active, calculate discounted price
+    if (discountActive) {
+      if (variant.discountType === "fixed" && variant.discountAmount > 0) {
+        finalDiscountAmount = Number(variant.discountAmount) || 0;
+        finalDiscountedPrice = Math.max(0, finalBasePrice - finalDiscountAmount);
+        finalDiscountPercentage = finalBasePrice > 0 ? 
+          Math.round((finalDiscountAmount / finalBasePrice) * 100) : 0;
       } else {
-        discountStartTime = product.discountStartTime;
-        discountEndTime = product.discountEndTime;
+        // Percentage discount
+        finalDiscountPercentage = Number(variant.discountPercentage || product.discountPercentage || 0);
+        finalDiscountedPrice = finalBasePrice - (finalBasePrice * finalDiscountPercentage / 100);
+        finalDiscountAmount = finalBasePrice - finalDiscountedPrice;
       }
     } else {
-      // ✅ FALLBACK TO SERVER-SIDE PRICE CALCULATION
-      console.log("💰 Using server-calculated prices");
-      
-      if (variantId && variant) {
-        // Use variant pricing
-        finalBasePrice = Number(variant.basePrice || product.basePrice || variant.price || product.price || 0);
-        finalDiscountedPrice = Number(variant.price || product.price || 0);
-        
-        // Calculate discount based on discount type
-        if (variant.discountType === "fixed" && variant.discountAmount > 0) {
-          finalDiscountAmount = Number(variant.discountAmount) || 0;
-          finalDiscountedPrice = Math.max(0, finalBasePrice - finalDiscountAmount);
-          finalDiscountPercentage = finalBasePrice > 0 ? 
-            Math.round((finalDiscountAmount / finalBasePrice) * 100) : 0;
-        } else {
-          // Percentage discount
-          finalDiscountPercentage = Number(variant.discountPercentage || product.discountPercentage || 0);
-          finalDiscountedPrice = finalBasePrice - (finalBasePrice * finalDiscountPercentage / 100);
-          finalDiscountAmount = finalBasePrice - finalDiscountedPrice;
-        }
-        
-        discountActive = product.isVariantDiscountActive(variantId);
-        discountStartTime = variant.discountStartTime;
-        discountEndTime = variant.discountEndTime;
-      } else {
-        // Use product pricing
-        finalBasePrice = Number(product.basePrice || product.price || 0);
-        finalDiscountedPrice = Number(product.price || 0);
-        
-        // Calculate discount based on discount type
-        if (product.discountType === "fixed" && product.discountAmount > 0) {
-          finalDiscountAmount = Number(product.discountAmount) || 0;
-          finalDiscountedPrice = Math.max(0, finalBasePrice - finalDiscountAmount);
-          finalDiscountPercentage = finalBasePrice > 0 ? 
-            Math.round((finalDiscountAmount / finalBasePrice) * 100) : 0;
-        } else {
-          // Percentage discount
-          finalDiscountPercentage = Number(product.discountPercentage || 0);
-          finalDiscountedPrice = finalBasePrice - (finalBasePrice * finalDiscountPercentage / 100);
-          finalDiscountAmount = finalBasePrice - finalDiscountedPrice;
-        }
-        
-        discountActive = product.isDiscountActive();
-        discountStartTime = product.discountStartTime;
-        discountEndTime = product.discountEndTime;
-      }
-
-      // Ensure prices are valid
-      finalBasePrice = Math.max(0.01, finalBasePrice);
-      finalDiscountedPrice = Math.max(0.01, finalDiscountedPrice);
+      // If discount is not active, use base price as discounted price
+      finalDiscountedPrice = finalBasePrice;
+      finalDiscountPercentage = 0;
+      finalDiscountAmount = 0;
     }
+    
+    discountStartTime = variant.discountStartTime;
+    discountEndTime = variant.discountEndTime;
+  } else {
+    // Use product pricing
+    finalBasePrice = Number(product.basePrice || product.price || 0);
+    finalDiscountedPrice = Number(product.price || 0);
+    
+    // Check if discount is active
+    discountActive = isProductDiscountActive(product);
+    
+    // If discount is active, calculate discounted price
+    if (discountActive) {
+      if (product.discountType === "fixed" && product.discountAmount > 0) {
+        finalDiscountAmount = Number(product.discountAmount) || 0;
+        finalDiscountedPrice = Math.max(0, finalBasePrice - finalDiscountAmount);
+        finalDiscountPercentage = finalBasePrice > 0 ? 
+          Math.round((finalDiscountAmount / finalBasePrice) * 100) : 0;
+      } else {
+        // Percentage discount
+        finalDiscountPercentage = Number(product.discountPercentage || 0);
+        finalDiscountedPrice = finalBasePrice - (finalBasePrice * finalDiscountPercentage / 100);
+        finalDiscountAmount = finalBasePrice - finalDiscountedPrice;
+      }
+    } else {
+      // If discount is not active, use base price as discounted price
+      finalDiscountedPrice = finalBasePrice;
+      finalDiscountPercentage = 0;
+      finalDiscountAmount = 0;
+    }
+    
+    discountStartTime = product.discountStartTime;
+    discountEndTime = product.discountEndTime;
+  }
+
+  // Ensure prices are valid
+  finalBasePrice = Math.max(0.01, finalBasePrice);
+  finalDiscountedPrice = Math.max(0.01, finalDiscountedPrice);
+}
 
     console.log("✅ Final price calculation:", {
       basePrice: finalBasePrice,

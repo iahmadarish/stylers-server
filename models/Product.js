@@ -973,7 +973,6 @@ productSchema.pre(/^find/, function (next) {
 })
 
 productSchema.pre("validate", function (next) {
-  // Ensure each variant has a unique combination of color and size
   const combinations = new Set()
   for (let i = 0; i < this.variants.length; i++) {
     const variant = this.variants[i]
@@ -983,7 +982,6 @@ productSchema.pre("validate", function (next) {
     }
     combinations.add(combination)
   }
-  // Ensure all variant color codes exist in images
   const imageColorCodes = new Set(this.images.map((img) => img.colorCode))
   for (let i = 0; i < this.variants.length; i++) {
     const variant = this.variants[i]
@@ -993,6 +991,41 @@ productSchema.pre("validate", function (next) {
   }
   next()
 })
+
+
+productSchema.pre("save", async function (next) {
+  if (this.isModified("variants") || this.isNew) {
+    console.log("=== PRODUCT CODE GLOBAL UNIQUE CHECK HOOK TRIGGERED ===");
+    const productCodesInThisDoc = new Set();
+    this.variants.forEach((v) => {
+      if (v.productCode) {
+        productCodesInThisDoc.add(v.productCode);
+      }
+    });
+
+    const codesToCheck = Array.from(productCodesInThisDoc);
+
+    if (codesToCheck.length > 0) {
+      const query = {
+        "variants.productCode": { $in: codesToCheck },
+        ...(this._id && { _id: { $ne: this._id } }), 
+      };
+      const existingProduct = await mongoose.models.Product.findOne(query);
+
+      if (existingProduct) {
+        const conflictingCode = existingProduct.variants.find(v => codesToCheck.includes(v.productCode)).productCode;
+        
+        console.error(`[CONFLICT] Product code "${conflictingCode}" is already in use by another product: ${existingProduct.title}`);
+
+        const error = new Error(`Product code "${conflictingCode}" is already in use by another product. Please ensure the code is unique across all products.`);
+        error.name = 'ProductCodeConflict';
+        return next(error);
+      }
+      console.log("Global product code uniqueness confirmed.");
+    }
+  }
+  next();
+});
 
 // Indexes
 productSchema.index({ parentCategoryId: 1, subCategoryId: 1 })

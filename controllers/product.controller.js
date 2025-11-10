@@ -278,6 +278,14 @@ export const createProduct = async (req, res) => {
   } catch (error) {
     console.error("[DEBUG] Error creating product:", error)
 
+if (error.name === "ProductCodeConflict") {
+      return res.status(400).json({
+        status: "error",
+        message: error.message, // <--- এটি স্ট্রিং হতে হবে
+        errors: [{ msg: error.message, field: "productCode" }],
+      })
+    }
+    
     // Handle duplicate key errors (like duplicate slug)
     if (error.code === 11000) {
       return res.status(400).json({

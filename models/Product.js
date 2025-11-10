@@ -972,25 +972,7 @@ productSchema.pre(/^find/, function (next) {
   next()
 })
 
-productSchema.pre("validate", function (next) {
-  const combinations = new Set()
-  for (let i = 0; i < this.variants.length; i++) {
-    const variant = this.variants[i]
-    const combination = `${variant.colorCode}-${variant.size}`
-    if (combinations.has(combination)) {
-      this.invalidate(`variants.${i}`, `Duplicate variant combination: ${variant.colorName} - ${variant.size}`)
-    }
-    combinations.add(combination)
-  }
-  const imageColorCodes = new Set(this.images.map((img) => img.colorCode))
-  for (let i = 0; i < this.variants.length; i++) {
-    const variant = this.variants[i]
-    if (!imageColorCodes.has(variant.colorCode)) {
-      this.invalidate(`variants.${i}.colorCode`, `Color code ${variant.colorCode} must have corresponding images`)
-    }
-  }
-  next()
-})
+
 
 
 productSchema.pre("save", async function (next) {
@@ -1026,7 +1008,25 @@ productSchema.pre("save", async function (next) {
   }
   next();
 });
-
+productSchema.pre("validate", function (next) {
+  const combinations = new Set()
+  for (let i = 0; i < this.variants.length; i++) {
+    const variant = this.variants[i]
+    const combination = `${variant.colorCode}-${variant.size}`
+    if (combinations.has(combination)) {
+      this.invalidate(`variants.${i}`, `Duplicate variant combination: ${variant.colorName} - ${variant.size}`)
+    }
+    combinations.add(combination)
+  }
+  const imageColorCodes = new Set(this.images.map((img) => img.colorCode))
+  for (let i = 0; i < this.variants.length; i++) {
+    const variant = this.variants[i]
+    if (!imageColorCodes.has(variant.colorCode)) {
+      this.invalidate(`variants.${i}.colorCode`, `Color code ${variant.colorCode} must have corresponding images`)
+    }
+  }
+  next()
+})
 // Indexes
 productSchema.index({ parentCategoryId: 1, subCategoryId: 1 })
 productSchema.index({ isFeatured: 1 })

@@ -27,39 +27,6 @@ export const createProduct = async (req, res) => {
 
     console.log("[DEBUG] Parsed product data:", productData)
 
-     const productCodes = []
-    if (productData.variants && productData.variants.length > 0) {
-      productData.variants.forEach(variant => {
-        if (variant.productCode) {
-          productCodes.push(variant.productCode)
-        }
-      })
-    }
-
-    if (productCodes.length > 0) {
-      const existingProducts = await Product.find({
-        'variants.productCode': { $in: productCodes }
-      })
-
-      if (existingProducts.length > 0) {
-        const duplicateCodes = []
-        existingProducts.forEach(product => {
-          product.variants.forEach(variant => {
-            if (productCodes.includes(variant.productCode)) {
-              duplicateCodes.push(variant.productCode)
-            }
-          })
-        })
-
-        if (duplicateCodes.length > 0) {
-          return res.status(400).json({
-            status: "error",
-            message: `Product codes already exist in other products: ${duplicateCodes.join(', ')}`,
-          })
-        }
-      }
-    }
-
     // Required fields validation
     const requiredFields = [
       "title",
@@ -156,98 +123,47 @@ export const createProduct = async (req, res) => {
 
         // Process sizes inside the variant
         variant.sizes.forEach((s) => {
-  const variantData = {
-    productCode: variant.productCode || generateProductCode(),
-    colorCode: variant.colorCode,
-    colorName: variant.colorName,
-    size: s.size,
-    dimension: s.dimension || "",
-    stock: Number.parseInt(s.stock) || 0,
-  }
+          const variantData = {
+            productCode: variant.productCode || generateProductCode(),
+            colorCode: variant.colorCode,
+            colorName: variant.colorName,
+            size: s.size,
+            dimension: s.dimension || "",
+            stock: Number.parseInt(s.stock) || 0,
+          }
 
-  if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
-    variantData.basePrice = Number.parseFloat(variant.basePrice)
-  }
+          if (variant.basePrice !== undefined && variant.basePrice !== null && variant.basePrice !== "") {
+            variantData.basePrice = Number.parseFloat(variant.basePrice)
+          }
 
-  // ✅ FIXED: Properly detect discount type from the data
-  if (variant.discountAmount !== undefined && variant.discountAmount !== null && variant.discountAmount !== "") {
-    // If discountAmount is provided, it's fixed amount discount
-    variantData.discountType = "fixed"
-    const discountAmount = Number.parseFloat(variant.discountAmount) || 0
-    variantData.discountAmount = discountAmount
-    variantData.discountPercentage = 0
-    
-    if (discountAmount > 0) {
-      variantData.discountStartTime = variant.discountStartTime
-        ? new Date(variant.discountStartTime)
-        : new Date()
-      variantData.discountEndTime = variant.discountEndTime 
-        ? new Date(variant.discountEndTime)
-        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    }
-  } 
-  else if (variant.discountPercentage !== undefined && variant.discountPercentage !== null && variant.discountPercentage !== "") {
-    // If discountPercentage is provided, it's percentage discount
-    variantData.discountType = variant.discountType || "percentage"
-    const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
-    variantData.discountPercentage = discountPercentage
-    variantData.discountAmount = 0
-    
-    if (discountPercentage > 0) {
-      variantData.discountStartTime = variant.discountStartTime
-        ? new Date(variant.discountStartTime)
-        : new Date()
-      variantData.discountEndTime = variant.discountEndTime 
-        ? new Date(variant.discountEndTime)
-        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    }
-  }
-  // ✅ If both are provided, use the discountType to decide
-  else if (variant.discountType) {
-    variantData.discountType = variant.discountType
-    
-    if (variant.discountType === "percentage" && variant.discountPercentage) {
-      const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
-      variantData.discountPercentage = discountPercentage
-      variantData.discountAmount = 0
-      
-      if (discountPercentage > 0) {
-        variantData.discountStartTime = variant.discountStartTime
-          ? new Date(variant.discountStartTime)
-          : new Date()
-        variantData.discountEndTime = variant.discountEndTime 
-          ? new Date(variant.discountEndTime)
-          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      }
-    } else if (variant.discountType === "fixed" && variant.discountAmount) {
-      const discountAmount = Number.parseFloat(variant.discountAmount) || 0
-      variantData.discountAmount = discountAmount
-      variantData.discountPercentage = 0
-      
-      if (discountAmount > 0) {
-        variantData.discountStartTime = variant.discountStartTime
-          ? new Date(variant.discountStartTime)
-          : new Date()
-        variantData.discountEndTime = variant.discountEndTime 
-          ? new Date(variant.discountEndTime)
-          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      }
-    }
-  }
+          if (variant.discountType) {
+            variantData.discountType = variant.discountType
 
-  processedVariants.push(variantData)
-  totalStock += Number.parseInt(s.stock) || 0
-  console.log("[DEBUG] Added variant with proper discount:", {
-    productCode: variantData.productCode,
-    color: variantData.colorName,
-    basePrice: variantData.basePrice,
-    discountType: variantData.discountType,
-    discountPercentage: variantData.discountPercentage,
-    discountAmount: variantData.discountAmount,
-    discountStartTime: variantData.discountStartTime,
-    discountEndTime: variantData.discountEndTime
-  })
-})
+            if (variant.discountType === "percentage" && variant.discountPercentage) {
+              const discountPercentage = Number.parseFloat(variant.discountPercentage) || 0
+              variantData.discountPercentage = discountPercentage
+              if (discountPercentage > 0) {
+                variantData.discountStartTime = variant.discountStartTime
+                  ? new Date(variant.discountStartTime)
+                  : undefined
+                variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+              }
+            } else if (variant.discountType === "fixed" && variant.discountAmount) {
+              const discountAmount = Number.parseFloat(variant.discountAmount) || 0
+              variantData.discountAmount = discountAmount
+              if (discountAmount > 0) {
+                variantData.discountStartTime = variant.discountStartTime
+                  ? new Date(variant.discountStartTime)
+                  : undefined
+                variantData.discountEndTime = variant.discountEndTime ? new Date(variant.discountEndTime) : undefined
+              }
+            }
+          }
+
+          processedVariants.push(variantData)
+          totalStock += Number.parseInt(s.stock) || 0
+          console.log("[DEBUG] Added variant:", variantData)
+        })
       }
     }
 
@@ -387,47 +303,6 @@ export const createProduct = async (req, res) => {
     })
   }
 }
-
-export const checkProductCodes = async (req, res) => {
-  try {
-    const { productCodes } = req.body;
-
-    if (!productCodes || !Array.isArray(productCodes)) {
-      return res.status(400).json({
-        status: "error",
-        message: "Product codes array is required"
-      });
-    }
-
-    // Find products that have any of these product codes
-    const existingProducts = await Product.find({
-      'variants.productCode': { $in: productCodes }
-    });
-
-    const duplicateCodes = [];
-    existingProducts.forEach(product => {
-      product.variants.forEach(variant => {
-        if (productCodes.includes(variant.productCode) && 
-            !duplicateCodes.includes(variant.productCode)) {
-          duplicateCodes.push(variant.productCode);
-        }
-      });
-    });
-
-    res.json({
-      status: "success",
-      duplicateCodes
-    });
-
-  } catch (error) {
-    console.error('Error checking product codes:', error);
-    res.status(500).json({
-      status: "error",
-      message: "Internal server error"
-    });
-  }
-};
-
 
 // @desc    Get all products
 // @route   GET /api/products

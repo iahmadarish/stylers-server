@@ -191,8 +191,7 @@ import {
   getProductSpecifications,
   getProductPricing,
   getAllProductsForAdmin,
-getProductStats,
-checkProductCodes
+getProductStats
 } from "../controllers/product.controller.js"
 import { protect, restrictTo } from "../middleware/auth.middleware.js"
 import { productUpload } from "../utils/cloudinary.js"
@@ -233,7 +232,6 @@ router.get("/style/:styleId", getProductsByStyle)
 router.get("/hierarchy/:parentCategoryId/:subCategoryId?/:dressTypeId?/:styleId?", getProductsByHierarchy)
 router.get("/:id/images/:color", getProductImagesByColor)
 router.get("/:productId/reviews", getProductReviews)
-router.post('/check-product-codes', checkProductCodes);
 router.get('/by-sub/:subId', async (req, res) => {
    try {
      const products = await Product.find({ 

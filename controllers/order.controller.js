@@ -15,20 +15,24 @@ import Coupon from "../models/Coupon.js";
 // order.controller.js (or utils file)
 
 const generateOrderNumber = (serialNum) => {
-  const now = new Date();
-  
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const HHMM = `${hours}${minutes}`;
-  
-  // 🌟 CHANGE: Use the provided serial number instead of Math.random()
-  const serialPart = serialNum.toString().padStart(4, '0'); 
+    // 1. Get the current time in UTC
+    const now = new Date();
 
-  // Format: [YYYY][MM][DD][HHMM][XXXX]
-  return `${year}${month}${day}${HHMM}${serialPart}`;
+    // 2. Adjust for BST (UTC+6): Add 6 hours to the UTC timestamp (6 * 60 * 60 * 1000 milliseconds)
+    const bstTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // <--- THIS IS THE KEY CHANGE
+
+    // 3. Extract components from the BST-adjusted date using UTC methods (safest approach)
+    const year = bstTime.getUTCFullYear();
+    const month = String(bstTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(bstTime.getUTCDate()).padStart(2, '0');
+    const hours = String(bstTime.getUTCHours()).padStart(2, '0'); // <-- Will now be BST hour (13-23 or 00-12)
+    const minutes = String(bstTime.getUTCMinutes()).padStart(2, '0');
+    const HHMM = `${hours}${minutes}`;
+
+    const serialPart = serialNum.toString().padStart(4, '0');
+
+    // Expected Format Example (if run at 13:58 BST): [2025][11][15][1358][XXXX]
+    return `${year}${month}${day}${HHMM}${serialPart}`;
 };
 
 
@@ -137,7 +141,7 @@ const generateOrderNumber = (serialNum) => {
 //       const io = getIo();
 //       const customerName = order.shippingAddress.fullName || 'a Customer';
 //       const notificationMessage = `New Order #${order.orderNumber} placed by ${customerName}`
-      
+
 //       const notificationData = {
 //         message: notificationMessage,
 //         orderId: order._id.toString(),
@@ -145,7 +149,7 @@ const generateOrderNumber = (serialNum) => {
 //         timestamp: new Date().toISOString(),
 //         link: `/orders/${order._id}` 
 //       }
-      
+
 //       // Emit the notification to all connected clients (e.g., admin dashboard)
 //       io.emit('newOrderNotification', notificationData); 
 //       console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
@@ -221,10 +225,10 @@ const generateOrderNumber = (serialNum) => {
 // ##########################################################
 export const createOrder = async (req, res) => {
   try {
-    const { 
-      userId, 
-      shippingAddress, 
-      paymentMethod, 
+    const {
+      userId,
+      shippingAddress,
+      paymentMethod,
       shippingCost = 0,
       couponCode = null,
       couponDiscount = 0 // ✅ কুপন ডিসকাউন্ট নিন
@@ -299,14 +303,14 @@ export const createOrder = async (req, res) => {
     if (couponCode && couponDiscount > 0) {
       try {
         console.log("🔍 Validating coupon:", couponCode);
-        const coupon = await Coupon.findOne({ 
-          code: couponCode.toUpperCase(), 
-          isActive: true 
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true
         });
 
         if (coupon) {
           console.log("✅ Coupon found:", coupon.code);
-          
+
           // কুপন ভ্যালিডেশন চেক
           if (!coupon.canUse) {
             console.log("❌ Coupon cannot be used (expired/inactive)");
@@ -327,7 +331,6 @@ export const createOrder = async (req, res) => {
       }
     }
 
-    // ✅ CHANGE: টোটাল ক্যালকুলেশনে কুপন ডিসকাউন্ট অ্যাপ্লাই করুন
     const totalAmount = Math.max(subtotal + shippingCost - finalCouponDiscount, 0);
 
     console.log("💰 Order Calculation WITH COUPON:", {
@@ -340,10 +343,8 @@ export const createOrder = async (req, res) => {
     // Generate order number
     const orderCount = await Order.countDocuments()
     const serialNumber = orderCount + 1
-    const orderNumber = generateOrderNumber(serialNumber) 
+    const orderNumber = generateOrderNumber(serialNumber)
     console.log(`Generated New Order Number: ${orderNumber}`)
-
-    // ✅ CHANGE: Create order with coupon data
     const order = new Order({
       userId,
       orderNumber,
@@ -355,14 +356,14 @@ export const createOrder = async (req, res) => {
       shippingAddress,
       paymentMethod,
       couponCode: couponCode || null,
-      couponDiscount: finalCouponDiscount, // ✅ কুপন ডিসকাউন্ট যোগ করুন
+      couponDiscount: finalCouponDiscount, 
       isGuestOrder: false,
     });
 
     await order.save();
-    console.log('✅ Order created successfully:', order.orderNumber);
+    console.log('Order created successfully:', order.orderNumber);
 
-    // ✅ CHANGE: কুপন ইউসেজ ট্র্যাক করুন
+
     if (validatedCoupon && finalCouponDiscount > 0) {
       try {
         await Coupon.findByIdAndUpdate(validatedCoupon._id, {
@@ -376,23 +377,23 @@ export const createOrder = async (req, res) => {
     }
 
     // =======================================================
-    // 🔔 Socket.IO Notification Block - START 
+    // Socket.IO Notification Block - START 
     // =======================================================
     try {
       const io = getIo();
       const customerName = order.shippingAddress.fullName || 'a Customer';
       const notificationMessage = `New Order #${order.orderNumber} placed by ${customerName}`
-      
+
       const notificationData = {
         message: notificationMessage,
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
         timestamp: new Date().toISOString(),
-        link: `/orders/${order._id}` 
+        link: `/orders/${order._id}`
       }
-      
+
       // Emit the notification to all connected clients (e.g., admin dashboard)
-      io.emit('newOrderNotification', notificationData); 
+      io.emit('newOrderNotification', notificationData);
       console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
 
     } catch (socketError) {
@@ -405,7 +406,7 @@ export const createOrder = async (req, res) => {
       const email = order.shippingAddress.email;
       const customerName = order.shippingAddress.fullName || 'Customer';
 
-      console.log('📧 Sending email to logged-in user:', email);
+      console.log('Sending email to logged-in user:', email);
 
       if (email) {
         const emailResult = await sendOrderEmails({
@@ -418,7 +419,7 @@ export const createOrder = async (req, res) => {
         });
 
         if (emailResult.success) {
-          console.log('✅ Email sent to logged-in user');
+          console.log('Email sent to logged-in user');
         }
       }
     } catch (emailError) {
@@ -686,7 +687,7 @@ export const createOrder = async (req, res) => {
 //   const io = getIo(); // <-- নিশ্চিত করুন যে getIo() ইমপোর্ট করা হয়েছে
 //   const customerName = order.shippingAddress.fullName || 'a Guest Customer';
 //   const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
-  
+
 //   const notificationData = {
 //     message: notificationMessage,
 //     orderId: order._id.toString(),
@@ -694,7 +695,7 @@ export const createOrder = async (req, res) => {
 //     timestamp: new Date().toISOString(),
 //     link: `/orders/${order._id}` 
 //   }
-  
+
 //   io.emit('newOrderNotification', notificationData); 
 //   console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`); // <-- এই লগটি আপনার সার্ভার লগে আসা উচিত
 
@@ -753,7 +754,7 @@ export const createGuestOrder = async (req, res) => {
       billingAddress,
       items,
       paymentMethod,
-      shippingCost = 0, 
+      shippingCost = 0,
       couponCode = null,
       couponDiscount = 0, // ✅ কুপন ডিসকাউন্ট নিন
       specialInstructions = "",
@@ -890,7 +891,7 @@ export const createGuestOrder = async (req, res) => {
     };
 
     const dynamicShippingCost = calculateShippingCost(calculatedSubtotal, shippingAddress.city);
-    
+
     // ✅ CHANGE: টোটাল ক্যালকুলেশনে কুপন ডিসকাউন্ট অ্যাপ্লাই করুন
     const calculatedTotalAmount = Math.max(calculatedSubtotal + dynamicShippingCost - couponDiscount, 0);
 
@@ -903,7 +904,7 @@ export const createGuestOrder = async (req, res) => {
     });
 
     const orderCount = await Order.countDocuments();
-    const serialNumber = orderCount + 1; 
+    const serialNumber = orderCount + 1;
     const orderNumber = generateOrderNumber(serialNumber);
     console.log(`Generated Guest Order Number: ${orderNumber}`);
 
@@ -914,14 +915,14 @@ export const createGuestOrder = async (req, res) => {
     if (couponCode && couponDiscount > 0) {
       try {
         console.log("🔍 Validating coupon for guest:", couponCode);
-        const coupon = await Coupon.findOne({ 
-          code: couponCode.toUpperCase(), 
-          isActive: true 
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true
         });
 
         if (coupon) {
           console.log("✅ Coupon found for guest:", coupon.code);
-          
+
           // গেস্ট ইউজারের জন্য ভ্যালিডেশন (perUserLimit skip করব)
           if (!coupon.canUse) {
             console.log("❌ Coupon cannot be used (expired/inactive)");
@@ -1023,16 +1024,16 @@ export const createGuestOrder = async (req, res) => {
       const io = getIo();
       const customerName = order.shippingAddress.fullName || 'a Guest Customer';
       const notificationMessage = `New Guest Order #${order.orderNumber} placed by ${customerName}`
-      
+
       const notificationData = {
         message: notificationMessage,
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
         timestamp: new Date().toISOString(),
-        link: `/orders/${order._id}` 
+        link: `/orders/${order._id}`
       }
-      
-      io.emit('newOrderNotification', notificationData); 
+
+      io.emit('newOrderNotification', notificationData);
       console.log(`[Socket.IO] Emitted new order notification for: ${order.orderNumber}`);
 
     } catch (socketError) {
@@ -1086,7 +1087,7 @@ export const createGuestOrder = async (req, res) => {
 // ##########################################################
 const updateProductStock = async (orderItems) => {
   console.log('Updating product stock for items:', JSON.stringify(orderItems, null, 2));
-  
+
   for (const item of orderItems) {
     try {
       console.log(`Processing item: ${item.productTitle || 'Unknown Product'}`);
@@ -1133,7 +1134,7 @@ const updateProductStock = async (orderItems) => {
       console.error(`Error updating stock for product ${item.productId}:`, error);
     }
   }
-  
+
   console.log('Product stock update completed');
 };
 
@@ -1212,19 +1213,19 @@ export const trackGuestOrder = async (req, res) => {
 // ##########################################################
 export const getOrders = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      status, 
+    const {
+      page = 1,
+      limit = 10,
+      status,
       paymentStatus,
-      orderType = "all", 
+      orderType = "all",
       search,
       fromDate,
-      toDate 
+      toDate
     } = req.query
 
     const filter = {}
-    
+
     // Status filter
     if (status && status !== "all") {
       filter.status = status
@@ -1245,14 +1246,14 @@ export const getOrders = async (req, res) => {
     // Date range filter (NEW)
     if (fromDate || toDate) {
       filter.createdAt = {}
-      
+
       if (fromDate) {
         // Start of the day for fromDate
         const startDate = new Date(fromDate)
         startDate.setHours(0, 0, 0, 0)
         filter.createdAt.$gte = startDate
       }
-      
+
       if (toDate) {
         // End of the day for toDate
         const endDate = new Date(toDate)
@@ -1402,11 +1403,11 @@ export const getOrder = async (req, res) => {
 
     // MongoDB ObjectId ভ্যালিডেশন চেক করুন (24 হেক্স ক্যারেক্টার)
     if (identifier.length === 24 && identifier.match(/^[0-9a-fA-F]{24}$/)) {
-        // যদি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন
-        order = await Order.findById(identifier);
+      // যদি বৈধ ObjectId হয়, তবে _id দিয়ে খুঁজুন
+      order = await Order.findById(identifier);
     } else {
-        // যদি কাস্টম অর্ডার নম্বর হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
-        order = await Order.findOne({ orderNumber: identifier });
+      // যদি কাস্টম অর্ডার নম্বর হয়, তবে orderNumber ফিল্ড দিয়ে খুঁজুন
+      order = await Order.findOne({ orderNumber: identifier });
     }
 
     if (!order) {
@@ -1418,7 +1419,7 @@ export const getOrder = async (req, res) => {
 
   } catch (error) {
     // console.error(error) যোগ করুন যাতে কোনো অপ্রত্যাশিত এরর লগ হয়
-    console.error("❌ Error fetching order:", error); 
+    console.error("❌ Error fetching order:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -1444,11 +1445,11 @@ export const getOrder = async (req, res) => {
 //       return res.status(404).json({ message: "Order not found" })
 //     }
 
-    
+
 //     if (status === "shipped" && !order.pathaoOrderId) {
 //       try {
 //         console.log('Creating Pathao order for:', order.orderNumber);
-        
+
 //         const pathaoRes = await createPathaoOrder(order)
 
 //         order.pathaoTrackingId = pathaoRes.data.consignment_id
@@ -1457,20 +1458,20 @@ export const getOrder = async (req, res) => {
 
 //         await order.save()
 //         console.log("Pathao order created successfully:", pathaoRes.data)
-        
+
 //       } catch (err) {
 //         console.error("❌ Pathao order creation failed:", err.message)
-        
+
 //         // Sandbox-specific error handling
 //         if (PATHAO_BASE_URL.includes('sandbox')) {
 //           console.log('Sandbox environment - creating mock Pathao data');
-          
+
 //           // Mock data for sandbox testing
 //           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
 //           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
 //           order.pathaoStatus = 'pending';
 //           order.pathaoSandboxMode = true;
-          
+
 //           await order.save();
 //           console.log('✅ Mock Pathao data created for sandbox testing');
 //         } else {
@@ -1534,7 +1535,7 @@ export const getOrder = async (req, res) => {
 // ##########################################################
 const restoreProductStock = async (orderItems) => {
   console.log('🔄 Restoring product stock for items:', JSON.stringify(orderItems, null, 2));
-  
+
   for (const item of orderItems) {
     try {
       console.log(`📦 Processing item for stock restoration:`, {
@@ -1543,7 +1544,7 @@ const restoreProductStock = async (orderItems) => {
         quantity: item.quantity,
         variantId: item.variantId
       });
-      
+
       // ✅ FIX: Check if productId exists
       if (!item.productId) {
         console.log('❌ Item missing productId, skipping:', item);
@@ -1624,11 +1625,11 @@ export const updateOrder = async (req, res) => {
     // ✅ Stock Restoration Logic:
     // Restore stock if the new status is 'cancelled' or 'refunded',
     // AND the previous status was NOT already 'cancelled' or 'refunded' 
-const shouldRestoreStock =
-  (status === "cancelled" || status === "refunded" || status === "returned") &&
-  previousStatus !== "cancelled" &&
-  previousStatus !== "refunded" &&
-  previousStatus !== "returned";
+    const shouldRestoreStock =
+      (status === "cancelled" || status === "refunded" || status === "returned") &&
+      previousStatus !== "cancelled" &&
+      previousStatus !== "refunded" &&
+      previousStatus !== "returned";
 
     if (shouldRestoreStock) {
       console.log(`⚠️ Restoring stock for order ${orderToUpdate.orderNumber} due to status change from ${previousStatus} to ${status}`);
@@ -1642,7 +1643,7 @@ const shouldRestoreStock =
     if (status === "shipped" && !order.pathaoOrderId) {
       try {
         console.log('Creating Pathao order for:', order.orderNumber);
-        
+
         const pathaoRes = await createPathaoOrder(order)
 
         order.pathaoTrackingId = pathaoRes.data.consignment_id
@@ -1651,19 +1652,19 @@ const shouldRestoreStock =
 
         await order.save()
         console.log("Pathao order created successfully:", pathaoRes.data)
-        
+
       } catch (err) {
         console.error("❌ Pathao order creation failed:", err.message)
-        
+
         // Sandbox-specific error handling
         if (PATHAO_BASE_URL.includes('sandbox')) {
           console.log('Sandbox environment - creating mock Pathao data');
-          
+
           order.pathaoTrackingId = `PATH-SANDBOX-${Date.now()}`;
           order.pathaoOrderId = `PATH-ORDER-${Date.now()}`;
           order.pathaoStatus = 'pending';
           order.pathaoSandboxMode = true;
-          
+
           await order.save();
           console.log('✅ Mock Pathao data created for sandbox testing');
         } else {
@@ -1765,16 +1766,16 @@ export const updateOrderComprehensive = async (req, res) => {
     if (items && Array.isArray(items)) {
       // Restore original stock first
       await restoreProductStock(order.items);
-      
+
       // Update with new items
       await updateProductStock(items);
-      
+
       updateData.items = items;
-      
+
       // Recalculate order totals
       const recalculated = recalculateOrderTotals(items, shippingCost || order.shippingCost);
       Object.assign(updateData, recalculated);
-      
+
       changes.push("Order items updated and totals recalculated");
     }
 
@@ -1843,16 +1844,16 @@ export const updateOrderComprehensive = async (req, res) => {
     res.status(200).json({
       status: "success",
       message: "Order updated successfully",
-      data: { 
+      data: {
         order: updatedOrder,
-        changes 
+        changes
       },
     });
   } catch (error) {
     console.error("Comprehensive order update error:", error);
-    res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -2049,9 +2050,9 @@ const recalculateOrderTotals = (items, shippingCost = 0) => {
 //       const customerName = customerType === "user" ? 
 //         (shippingAddress.fullName || 'a Customer') : 
 //         (guestCustomerInfo.name || 'a Guest Customer');
-      
+
 //       const notificationMessage = `New Manual Order #${order.orderNumber} created by ${req.user.name} for ${customerName}`;
-      
+
 //       const notificationData = {
 //         message: notificationMessage,
 //         orderId: order._id.toString(),
@@ -2060,7 +2061,7 @@ const recalculateOrderTotals = (items, shippingCost = 0) => {
 //         link: `/orders/${order._id}`,
 //         createdBy: req.user.name
 //       };
-      
+
 //       io.emit('newOrderNotification', notificationData);
 //       console.log(`[Socket.IO] Emitted manual order notification for: ${order.orderNumber}`);
 //     } catch (socketError) {
@@ -2084,6 +2085,7 @@ const recalculateOrderTotals = (items, shippingCost = 0) => {
 // };
 
 
+//  mew version for createing without any shipping cost selecting. The order created by admin.
 export const createManualOrder = async (req, res) => {
   try {
     const {
@@ -2117,8 +2119,8 @@ export const createManualOrder = async (req, res) => {
     // Validate guest customer info
     if (customerType === "guest") {
       if (!guestCustomerInfo || !guestCustomerInfo.name || !guestCustomerInfo.email || !guestCustomerInfo.phone) {
-        return res.status(400).json({ 
-          message: "Guest customer name, email, and phone are required" 
+        return res.status(400).json({
+          message: "Guest customer name, email, and phone are required"
         });
       }
     }
@@ -2141,8 +2143,8 @@ export const createManualOrder = async (req, res) => {
 
       // Validate stock
       if (product.stock < item.quantity) {
-        return res.status(400).json({ 
-          message: `Insufficient stock for product: ${product.title}. Available: ${product.stock}, Requested: ${item.quantity}` 
+        return res.status(400).json({
+          message: `Insufficient stock for product: ${product.title}. Available: ${product.stock}, Requested: ${item.quantity}`
         });
       }
 
@@ -2176,9 +2178,7 @@ export const createManualOrder = async (req, res) => {
     }
 
     // Calculate shipping cost
-    const finalShippingCost = shippingCost === 0 ? 
-      calculateShippingCost(calculatedSubtotal, shippingAddress.city) : 
-      shippingCost;
+    const finalShippingCost = shippingCost
 
     // ✅ CHANGE: কুপন ভ্যালিডেশন যোগ করুন
     let finalCouponDiscount = 0;
@@ -2187,21 +2187,31 @@ export const createManualOrder = async (req, res) => {
     if (couponCode && couponDiscount > 0) {
       try {
         console.log("🔍 Validating coupon for manual order:", couponCode);
-        const coupon = await Coupon.findOne({ 
-          code: couponCode.toUpperCase(), 
-          isActive: true 
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true
         });
 
         if (coupon) {
           console.log("✅ Coupon found for manual order:", coupon.code);
-          
+
           // ভ্যালিডেশন চেক
           if (!coupon.canUse) {
             console.log("❌ Coupon cannot be used (expired/inactive)");
           } else if (customerType === "user" && !coupon.canUserUse(userId)) {
             console.log("❌ User cannot use this coupon (limit reached)");
           } else if (coupon.minOrderAmount && calculatedSubtotal < coupon.minOrderAmount) {
-            console.log(`❌ Minimum order amount not met. Required: ${coupon.minOrderAmount}, Current: ${calculatedSubtotal}`);
+            const minAmount = coupon.minOrderAmount.toFixed(2);
+            const currentAmount = calculatedSubtotal.toFixed(2);
+
+            // লগ মেসেজ (Debugging log)
+            console.log(`❌ Minimum order amount not met. Required: ${minAmount}, Current: ${currentAmount}`);
+
+            // ✅ FIX: মিনিমাম অর্ডার এমাউন্টের শর্ত পূরণ না হলে অর্ডার তৈরি বন্ধ করুন এবং ত্রুটির মেসেজ রিটার্ন করুন
+            return res.status(400).json({
+              status: "fail",
+              message: `Coupon validation failed: Minimum order amount ৳${minAmount} required. Current order amount is ৳${currentAmount}`
+            });
           } else {
             validatedCoupon = coupon;
             finalCouponDiscount = couponDiscount;
@@ -2227,7 +2237,7 @@ export const createManualOrder = async (req, res) => {
 
     // Generate order number
     const orderCount = await Order.countDocuments();
-    const serialNumber = orderCount + 1; 
+    const serialNumber = orderCount + 1;
     const orderNumber = generateOrderNumber(serialNumber);
     console.log(`Generated Manual Order Number: ${orderNumber}`);
 
@@ -2256,8 +2266,8 @@ export const createManualOrder = async (req, res) => {
       orderData.userId = userId;
     } else {
       orderData.guestCustomerInfo = guestCustomerInfo;
-      orderData.billingAddress = billingAddress?.sameAsShipping !== false ? 
-        { ...shippingAddress, sameAsShipping: true } : 
+      orderData.billingAddress = billingAddress?.sameAsShipping !== false ?
+        { ...shippingAddress, sameAsShipping: true } :
         { ...billingAddress, sameAsShipping: false };
     }
 
@@ -2294,12 +2304,12 @@ export const createManualOrder = async (req, res) => {
     // Socket notification
     try {
       const io = getIo();
-      const customerName = customerType === "user" ? 
-        (shippingAddress.fullName || 'a Customer') : 
+      const customerName = customerType === "user" ?
+        (shippingAddress.fullName || 'a Customer') :
         (guestCustomerInfo.name || 'a Guest Customer');
-      
+
       const notificationMessage = `New Manual Order #${order.orderNumber} created by ${req.user.name} for ${customerName}`;
-      
+
       const notificationData = {
         message: notificationMessage,
         orderId: order._id.toString(),
@@ -2308,7 +2318,7 @@ export const createManualOrder = async (req, res) => {
         link: `/orders/${order._id}`,
         createdBy: req.user.name
       };
-      
+
       io.emit('newOrderNotification', notificationData);
       console.log(`[Socket.IO] Emitted manual order notification for: ${order.orderNumber}`);
     } catch (socketError) {
@@ -2395,7 +2405,7 @@ export const cancelOrder = async (req, res) => {
     }
 
     // ✅ Stock Restoration: Restore stock before marking as cancelled
-    await restoreProductStock(order.items); 
+    await restoreProductStock(order.items);
 
     order.status = "cancelled"
     await order.save()
@@ -2610,29 +2620,29 @@ export const getOrderStatusData = async (req, res) => {
 
     const dateFilter = {};
     if (range !== 'all') {
-      const now = new Date(); 
+      const now = new Date();
       let startDate;
 
       switch (range) {
         case '7days':
-         
+
           startDate = new Date(now.setDate(now.getDate() - 7));
           break;
         case '30days':
-         
+
           startDate = new Date(now.setDate(now.getDate() - 30));
           break;
         case '6months':
-        
+
           startDate = new Date(now.setMonth(now.getMonth() - 6));
           break;
         default:
-         
-          startDate = null; 
+
+          startDate = null;
           break;
       }
-      
-    
+
+
       if (startDate) {
         dateFilter.createdAt = { $gte: startDate };
       }
@@ -2672,8 +2682,8 @@ export const getOrderStatusData = async (req, res) => {
 
     const orderStatusData = orderStatusCounts.map(item => ({
       name: statusLabels[item._id] || item._id,
-   
-      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0, 
+
+      value: totalOrders > 0 ? Math.round((item.count / totalOrders) * 100) : 0,
       color: statusColors[item._id] || '#6B7280'
     }));
 
@@ -2683,8 +2693,8 @@ export const getOrderStatusData = async (req, res) => {
     });
 
   } catch (error) {
-   
-    console.error('❌ Error in getOrderStatusData:', error); 
+
+    console.error('❌ Error in getOrderStatusData:', error);
     res.status(500).json({
       status: 'error',
       message: error.message || 'Internal server error'
@@ -2714,9 +2724,9 @@ export const deleteOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete order error:", error);
-    res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -2775,9 +2785,9 @@ export const getTopSoldProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching top products:", error);
-    res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
@@ -2815,9 +2825,9 @@ export const getCampaignSalesStats = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching campaign stats:", error);
-    res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message
     });
   }
 };

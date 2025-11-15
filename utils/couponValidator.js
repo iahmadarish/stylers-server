@@ -1,6 +1,7 @@
 // utils/couponValidator.js
 import CouponUsage from "../models/CouponUsage.js";
 
+// utils/couponValidator.js
 export const validateCouponLogic = async (coupon, userId, orderAmount, channel) => {
   const now = new Date();
 
@@ -37,11 +38,11 @@ export const validateCouponLogic = async (coupon, userId, orderAmount, channel) 
     }
   }
 
-  // Check minimum order amount
+  // ✅ IMPROVED: Check minimum order amount with better message
   if (coupon.minOrderAmount && orderAmount < coupon.minOrderAmount) {
     return { 
       valid: false, 
-      message: `Minimum order amount ${coupon.minOrderAmount} required` 
+      message: `Minimum order amount ৳${coupon.minOrderAmount} required. Your current order amount is ৳${orderAmount.toFixed(2)}` 
     };
   }
 

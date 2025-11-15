@@ -292,17 +292,39 @@ export const initializeGuestPayment = async (req, res) => {
 }
 
 
-const generateOrderNumber = (serialNum) => {
-  const now = new Date();
+// const generateOrderNumber = (serialNum) => {
+//   const now = new Date();
 
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const HHMM = `${hours}${minutes}`;
-  const serialPart = serialNum.toString().padStart(4, '0');
-  return `${year}${month}${day}${HHMM}${serialPart}`;
+//   const year = now.getFullYear();
+//   const month = String(now.getMonth() + 1).padStart(2, '0');
+//   const day = String(now.getDate()).padStart(2, '0');
+//   const hours = String(now.getHours()).padStart(2, '0');
+//   const minutes = String(now.getMinutes()).padStart(2, '0');
+//   const HHMM = `${hours}${minutes}`;
+//   const serialPart = serialNum.toString().padStart(4, '0');
+//   return `${year}${month}${day}${HHMM}${serialPart}`;
+// };
+
+
+const generateOrderNumber = (serialNum) => {
+    // 1. Get the current time in UTC
+    const now = new Date();
+
+    // 2. Adjust for BST (UTC+6): Add 6 hours to the UTC timestamp (6 * 60 * 60 * 1000 milliseconds)
+    const bstTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // <--- THIS IS THE KEY CHANGE
+
+    // 3. Extract components from the BST-adjusted date using UTC methods (safest approach)
+    const year = bstTime.getUTCFullYear();
+    const month = String(bstTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(bstTime.getUTCDate()).padStart(2, '0');
+    const hours = String(bstTime.getUTCHours()).padStart(2, '0'); // <-- Will now be BST hour (13-23 or 00-12)
+    const minutes = String(bstTime.getUTCMinutes()).padStart(2, '0');
+    const HHMM = `${hours}${minutes}`;
+
+    const serialPart = serialNum.toString().padStart(4, '0');
+
+    // Expected Format Example (if run at 13:58 BST): [2025][11][15][1358][XXXX]
+    return `${year}${month}${day}${HHMM}${serialPart}`;
 };
 
 // Cash on Delivery order

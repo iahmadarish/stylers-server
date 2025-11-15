@@ -300,21 +300,81 @@ export const deleteCoupon = catchAsync(async (req, res, next) => {
 });
 
 // Validate coupon
+// export const validateCoupon = catchAsync(async (req, res, next) => {
+//   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
+  
+//   const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
+  
+//   if (!coupon) {
+//     return next(new AppError("Invalid coupon code", 404));
+//   }
+
+//   // Validation logic
+//   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
+  
+//   if (!validation.valid) {
+//     return next(new AppError(validation.message, 400));
+//   }
+
+//   // ✅ IMPORTANT FIX: Check total discount limit (50% rule) with existing discount
+//   if (coupon.discountType === 'percentage') {
+//     const totalDiscount = existingDiscount + coupon.value;
+//     if (totalDiscount > 50) {
+//       // Calculate maximum allowed coupon discount
+//       const maxCouponDiscount = 50 - existingDiscount;
+//       return next(new AppError(`Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`, 400));
+//     }
+//   }
+
+//   res.json({ 
+//     success: true, 
+//     data: {
+//       coupon,
+//       discountAmount: validation.discountAmount,
+//       finalAmount: validation.finalAmount,
+//       // ✅ Additional info for frontend
+//       totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
+//     }
+//   });
+// });
+
+
+// couponController.js - validateCoupon ফাংশনে
+// couponController.js - validateCoupon ফাংশন
 export const validateCoupon = catchAsync(async (req, res, next) => {
   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
   
+  console.log('🎫 Coupon validation request:', {
+    code,
+    userId,
+    orderAmount,
+    channel,
+    existingDiscount
+  });
+
   const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
   
   if (!coupon) {
+    console.log('❌ Coupon not found or inactive:', code);
     return next(new AppError("Invalid coupon code", 404));
   }
+
+  console.log('✅ Coupon found:', {
+    code: coupon.code,
+    minOrderAmount: coupon.minOrderAmount,
+    discountType: coupon.discountType,
+    value: coupon.value
+  });
 
   // Validation logic
   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
   
   if (!validation.valid) {
+    console.log('❌ Coupon validation failed:', validation.message);
     return next(new AppError(validation.message, 400));
   }
+
+  console.log('✅ Coupon validation passed');
 
   // ✅ IMPORTANT FIX: Check total discount limit (50% rule) with existing discount
   if (coupon.discountType === 'percentage') {
@@ -322,9 +382,12 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
     if (totalDiscount > 50) {
       // Calculate maximum allowed coupon discount
       const maxCouponDiscount = 50 - existingDiscount;
+      console.log('❌ Total discount exceeds 50% limit');
       return next(new AppError(`Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`, 400));
     }
   }
+
+  console.log('🎉 Coupon validation successful, returning response');
 
   res.json({ 
     success: true, 

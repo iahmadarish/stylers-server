@@ -47,7 +47,7 @@ import quoteRoutes from './routes/quote.js';
 import { errorHandler } from "./middleware/error.middleware.js"
 import http from 'http';
 import { initSocket } from "./utils/socket.js";
-
+import topHeaderRoutes from './routes/topHeaderRoutes.js';
 // Initialize express app
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -211,6 +211,7 @@ app.use("/api/admin/coupons", adminCouponRoutes); // Admin coupon management rou
 app.use('/api/permissions', permissionRoutes) // Admin coupon management routes
 app.use('/api', contactRoutes);
 app.use('/api', quoteRoutes);
+app.use('/api/top-header', topHeaderRoutes);
 
 // Health check route
 app.get("/", (req, res) => {

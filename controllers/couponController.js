@@ -341,6 +341,67 @@ export const deleteCoupon = catchAsync(async (req, res, next) => {
 
 // couponController.js - validateCoupon ফাংশনে
 // couponController.js - validateCoupon ফাংশন
+// export const validateCoupon = catchAsync(async (req, res, next) => {
+//   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
+  
+//   console.log('🎫 Coupon validation request:', {
+//     code,
+//     userId,
+//     orderAmount,
+//     channel,
+//     existingDiscount
+//   });
+
+//   const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
+  
+//   if (!coupon) {
+//     console.log('❌ Coupon not found or inactive:', code);
+//     return next(new AppError("Invalid coupon code", 404));
+//   }
+
+//   console.log('✅ Coupon found:', {
+//     code: coupon.code,
+//     minOrderAmount: coupon.minOrderAmount,
+//     discountType: coupon.discountType,
+//     value: coupon.value
+//   });
+
+//   // Validation logic
+//   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
+  
+//   if (!validation.valid) {
+//     console.log('❌ Coupon validation failed:', validation.message);
+//     return next(new AppError(validation.message, 400));
+//   }
+
+//   console.log('✅ Coupon validation passed');
+
+//   // ✅ IMPORTANT FIX: Check total discount limit (50% rule) with existing discount
+//   if (coupon.discountType === 'percentage') {
+//     const totalDiscount = existingDiscount + coupon.value;
+//     if (totalDiscount > 50) {
+//       // Calculate maximum allowed coupon discount
+//       const maxCouponDiscount = 50 - existingDiscount;
+//       console.log('❌ Total discount exceeds 50% limit');
+//       return next(new AppError(`Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`, 400));
+//     }
+//   }
+
+//   console.log('🎉 Coupon validation successful, returning response');
+
+//   res.json({ 
+//     success: true, 
+//     data: {
+//       coupon,
+//       discountAmount: validation.discountAmount,
+//       finalAmount: validation.finalAmount,
+//       // ✅ Additional info for frontend
+//       totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
+//     }
+//   });
+// });
+
+
 export const validateCoupon = catchAsync(async (req, res, next) => {
   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
   
@@ -356,7 +417,11 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
   
   if (!coupon) {
     console.log('❌ Coupon not found or inactive:', code);
-    return next(new AppError("Invalid coupon code", 404));
+    // 🛑 FIX: Use direct res.status().json() instead of AppError for validation
+    return res.status(404).json({
+        success: false,
+        message: "Invalid coupon code"
+    });
   }
 
   console.log('✅ Coupon found:', {
@@ -371,19 +436,27 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
   
   if (!validation.valid) {
     console.log('❌ Coupon validation failed:', validation.message);
-    return next(new AppError(validation.message, 400));
+    // ✅ মূল FIX: MinOrderAmount-এর মেসেজটি সরাসরি 400 JSON Response-এ পাঠানো হলো।
+    // এটি গ্লোবাল এরর হ্যান্ডলার বাইপাস করে Hang হওয়া থেকে বাঁচাবে।
+    return res.status(400).json({
+        success: false,
+        message: validation.message 
+    });
   }
 
   console.log('✅ Coupon validation passed');
 
-  // ✅ IMPORTANT FIX: Check total discount limit (50% rule) with existing discount
+  // Check total discount limit (50% rule)
   if (coupon.discountType === 'percentage') {
     const totalDiscount = existingDiscount + coupon.value;
     if (totalDiscount > 50) {
-      // Calculate maximum allowed coupon discount
       const maxCouponDiscount = 50 - existingDiscount;
       console.log('❌ Total discount exceeds 50% limit');
-      return next(new AppError(`Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`, 400));
+      // 🛑 FIX: Use direct res.status().json()
+      return res.status(400).json({
+          success: false,
+          message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
+      });
     }
   }
 
@@ -395,7 +468,6 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
       coupon,
       discountAmount: validation.discountAmount,
       finalAmount: validation.finalAmount,
-      // ✅ Additional info for frontend
       totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
     }
   });

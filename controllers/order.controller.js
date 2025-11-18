@@ -2423,123 +2423,160 @@ export const cancelOrder = async (req, res) => {
 
 
 export const getDashboardStats = async (req, res) => {
-  try {
-    const { range = '30days' } = req.query;
+    try {
+        // req.query থেকে range, startDate, এবং endDate নিন
+        const { range = '30days', startDate, endDate } = req.query;
 
-    // date filter calculations
-    const dateFilter = {};
-    const now = new Date();
+        // ডেট ফিল্টার ইনিশিয়ালাইজেশন
+        const dateFilter = {};
+        const now = new Date();
 
-    switch (range) {
-      case '7days':
-        dateFilter.$gte = new Date(now.setDate(now.getDate() - 7));
-        break;
-      case '30days':
-        dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
-        break;
-      case '6months':
-        dateFilter.$gte = new Date(now.setMonth(now.getMonth() - 6));
-        break;
-      case '1year':
-        dateFilter.$gte = new Date(now.setFullYear(now.getFullYear() - 1));
-        break;
-      default:
-        dateFilter.$gte = new Date(now.setDate(now.getDate() - 30));
+        // ----------------------------------------------------
+        // 1. কাস্টম ডেট রেঞ্জ হ্যান্ডলিং
+        // ----------------------------------------------------
+        if (startDate && endDate) {
+            // যদি startDate এবং endDate থাকে, তবে কাস্টম রেঞ্জ ব্যবহার করুন
+            // (ফ্রন্টএন্ড থেকে আসা তারিখ স্ট্রিংগুলো)
+            dateFilter.$gte = new Date(startDate);
+            dateFilter.$lte = new Date(endDate);
+            
+            // নিশ্চিত করুন যে startDate, endDate এর আগে আছে। যদি না থাকে, লজিক্যালি ভুল হতে পারে।
+            if (dateFilter.$gte.getTime() > dateFilter.$lte.getTime()) {
+                // তারিখ উল্টে গেলে বা ভুল হলে একটি ত্রুটি দেওয়া যেতে পারে, বা শুধু লজিক ঠিক করা যেতে পারে
+                // নিরাপত্তার জন্য আমরা শুধু কনসোলে লগ করছি এবং $lte কে today করে দিচ্ছি
+                console.warn("Start date is after end date. Using default range.");
+                dateFilter.$gte = new Date(new Date().setDate(new Date().getDate() - 30));
+                delete dateFilter.$lte;
+            }
+        } else {
+            // ----------------------------------------------------
+            // 2. প্রিসেট টাইম রেঞ্জ হ্যান্ডলিং (যদি কাস্টম ডেট না থাকে)
+            // ----------------------------------------------------
+            
+            // গুরুত্বপূর্ণ: Date অবজেক্ট একবার পরিবর্তন হলে তার reference ধরে রাখে। 
+            // তাই প্রতিটি case-এ নতুন Date অবজেক্ট তৈরি করা উচিত, না হলে ভুল তারিখ আসবে।
+            const tempNow = new Date();
+            
+            switch (range) {
+                case '7days':
+                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 7));
+                    break;
+                case '30days':
+                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
+                    break;
+                case '6months':
+                    dateFilter.$gte = new Date(tempNow.setMonth(tempNow.getMonth() - 6));
+                    break;
+                case '1year':
+                    dateFilter.$gte = new Date(tempNow.setFullYear(tempNow.getFullYear() - 1));
+                    break;
+                default:
+                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
+            }
+        }
+
+        // ----------------------------------------------------
+        // ডেটা ফেচিং লজিক (dateFilter এখন কাস্টম বা প্রিসেট যেকোনো একটি)
+        // ----------------------------------------------------
+        
+        // মোট অর্ডার
+        const totalOrders = await Order.countDocuments({
+            createdAt: dateFilter
+        });
+
+        // মোট রেভিনিউ
+        const revenueData = await Order.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'paid',
+                    createdAt: dateFilter
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$totalAmount' },
+                    averageOrderValue: { $avg: '$totalAmount' }
+                }
+            }
+        ]);
+
+        // পেন্ডিং অর্ডার
+        const pendingOrders = await Order.countDocuments({
+            status: 'pending',
+            createdAt: dateFilter
+        });
+
+        // বিভিন্ন স্ট্যাটাসের অর্ডার
+        const orderStatusCounts = await Order.aggregate([
+            {
+                $match: { createdAt: dateFilter }
+            },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // ----------------------------------------------------
+        // মাসিক গ্রোথ ক্যালকুলেশন (এটি বর্তমানে পুরো ফাংশনের ফিল্টারকে উপেক্ষা করছে)
+        // গ্রোথ ক্যালকুলেশনের লজিক একই রাখা হয়েছে, তবে আপনি চাইলে এটিও ফিল্টার রেঞ্জের সাথে সম্পর্কিত করতে পারেন।
+        // ----------------------------------------------------
+        
+        const currentMonth = new Date().getMonth();
+        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const currentYear = new Date().getFullYear();
+
+        const currentMonthOrders = await Order.countDocuments({
+            $expr: {
+                $and: [
+                    { $eq: [{ $month: '$createdAt' }, currentMonth + 1] },
+                    { $eq: [{ $year: '$createdAt' }, currentYear] }
+                ]
+            }
+        });
+
+        const previousMonthOrders = await Order.countDocuments({
+            $expr: {
+                $and: [
+                    { $eq: [{ $month: '$createdAt' }, previousMonth + 1] },
+                    { $eq: [{ $year: '$createdAt' }, previousMonth === 11 ? currentYear - 1 : currentYear] }
+                ]
+            }
+        });
+
+        const orderGrowth = previousMonthOrders > 0
+            ? ((currentMonthOrders - previousMonthOrders) / previousMonthOrders * 100).toFixed(1)
+            : currentMonthOrders > 0 ? 100 : 0;
+
+        // রেসপন্স
+        res.json({
+            status: 'success',
+            data: {
+                totalOrders,
+                totalRevenue: revenueData[0]?.totalRevenue || 0,
+                averageOrderValue: revenueData[0]?.averageOrderValue || 0,
+                pendingOrders,
+                orderStatusCounts,
+                orderGrowth: parseFloat(orderGrowth),
+                
+                // এই ডেটাগুলো এখনও মক, এগুলো আপনার অন্য সোর্স থেকে আপডেট করতে হবে
+                monthlyGrowth: 12.5, 
+                totalProducts: 156,
+                totalUsers: 2453,
+                lowStockProducts: 12,
+                userGrowth: 15.2
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
     }
-
-    // মোট অর্ডার
-    const totalOrders = await Order.countDocuments({
-      createdAt: dateFilter
-    });
-
-    // মোট রেভিনিউ (শুধু paid অর্ডার)
-    const revenueData = await Order.aggregate([
-      {
-        $match: {
-          paymentStatus: 'paid',
-          createdAt: dateFilter
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalAmount' },
-          averageOrderValue: { $avg: '$totalAmount' }
-        }
-      }
-    ]);
-
-    // পেন্ডিং অর্ডার
-    const pendingOrders = await Order.countDocuments({
-      status: 'pending',
-      createdAt: dateFilter
-    });
-
-    // বিভিন্ন স্ট্যাটাসের অর্ডার
-    const orderStatusCounts = await Order.aggregate([
-      {
-        $match: { createdAt: dateFilter }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // মাসিক গ্রোথ ক্যালকুলেশন
-    const currentMonth = new Date().getMonth();
-    const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const currentYear = new Date().getFullYear();
-
-    const currentMonthOrders = await Order.countDocuments({
-      $expr: {
-        $and: [
-          { $eq: [{ $month: '$createdAt' }, currentMonth + 1] },
-          { $eq: [{ $year: '$createdAt' }, currentYear] }
-        ]
-      }
-    });
-
-    const previousMonthOrders = await Order.countDocuments({
-      $expr: {
-        $and: [
-          { $eq: [{ $month: '$createdAt' }, previousMonth + 1] },
-          { $eq: [{ $year: '$createdAt' }, previousMonth === 11 ? currentYear - 1 : currentYear] }
-        ]
-      }
-    });
-
-    const orderGrowth = previousMonthOrders > 0
-      ? ((currentMonthOrders - previousMonthOrders) / previousMonthOrders * 100).toFixed(1)
-      : currentMonthOrders > 0 ? 100 : 0;
-
-    // রেসপন্স
-    res.json({
-      status: 'success',
-      data: {
-        totalOrders,
-        totalRevenue: revenueData[0]?.totalRevenue || 0,
-        averageOrderValue: revenueData[0]?.averageOrderValue || 0,
-        pendingOrders,
-        orderStatusCounts,
-        orderGrowth: parseFloat(orderGrowth),
-        monthlyGrowth: 12.5, // এই ডেটা অন্য সোর্স থেকে আনতে হবে
-        // অন্যান্য মক ডেটা (আপনার অন্যান্য API থেকে replace করবেন)
-        totalProducts: 156,
-        totalUsers: 2453,
-        lowStockProducts: 12,
-        userGrowth: 15.2
-      }
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    });
-  }
 };
 
 // sales data

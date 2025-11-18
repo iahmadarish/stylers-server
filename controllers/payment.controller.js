@@ -85,7 +85,7 @@ const updateProductStock = async (orderItems) => {
     await product.save()
   }
 }
-
+ 
 // Initialize payment for guest orders
 export const initializeGuestPayment = async (req, res) => {
   try {

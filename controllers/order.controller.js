@@ -15,24 +15,24 @@ import Coupon from "../models/Coupon.js";
 // order.controller.js (or utils file)
 
 const generateOrderNumber = (serialNum) => {
-    // 1. Get the current time in UTC
-    const now = new Date();
+  // 1. Get the current time in UTC
+  const now = new Date();
 
-    // 2. Adjust for BST (UTC+6): Add 6 hours to the UTC timestamp (6 * 60 * 60 * 1000 milliseconds)
-    const bstTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // <--- THIS IS THE KEY CHANGE
+  // 2. Adjust for BST (UTC+6): Add 6 hours to the UTC timestamp (6 * 60 * 60 * 1000 milliseconds)
+  const bstTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // <--- THIS IS THE KEY CHANGE
 
-    // 3. Extract components from the BST-adjusted date using UTC methods (safest approach)
-    const year = bstTime.getUTCFullYear();
-    const month = String(bstTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(bstTime.getUTCDate()).padStart(2, '0');
-    const hours = String(bstTime.getUTCHours()).padStart(2, '0'); // <-- Will now be BST hour (13-23 or 00-12)
-    const minutes = String(bstTime.getUTCMinutes()).padStart(2, '0');
-    const HHMM = `${hours}${minutes}`;
+  // 3. Extract components from the BST-adjusted date using UTC methods (safest approach)
+  const year = bstTime.getUTCFullYear();
+  const month = String(bstTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(bstTime.getUTCDate()).padStart(2, '0');
+  const hours = String(bstTime.getUTCHours()).padStart(2, '0'); // <-- Will now be BST hour (13-23 or 00-12)
+  const minutes = String(bstTime.getUTCMinutes()).padStart(2, '0');
+  const HHMM = `${hours}${minutes}`;
 
-    const serialPart = serialNum.toString().padStart(4, '0');
+  const serialPart = serialNum.toString().padStart(4, '0');
 
-    // Expected Format Example (if run at 13:58 BST): [2025][11][15][1358][XXXX]
-    return `${year}${month}${day}${HHMM}${serialPart}`;
+  // Expected Format Example (if run at 13:58 BST): [2025][11][15][1358][XXXX]
+  return `${year}${month}${day}${HHMM}${serialPart}`;
 };
 
 
@@ -356,7 +356,7 @@ export const createOrder = async (req, res) => {
       shippingAddress,
       paymentMethod,
       couponCode: couponCode || null,
-      couponDiscount: finalCouponDiscount, 
+      couponDiscount: finalCouponDiscount,
       isGuestOrder: false,
     });
 
@@ -2341,7 +2341,7 @@ export const createManualOrder = async (req, res) => {
   }
 };
 
-  
+
 // ##########################################################
 //  This is older version of cancel order function. Currently not using but have to keep for references in future. 
 // ##########################################################
@@ -2423,160 +2423,129 @@ export const cancelOrder = async (req, res) => {
 
 
 export const getDashboardStats = async (req, res) => {
-    try {
-        // req.query থেকে range, startDate, এবং endDate নিন
-        const { range = '30days', startDate, endDate } = req.query;
+  try {
+    const { range = '30days', startDate, endDate } = req.query;
 
-        // ডেট ফিল্টার ইনিশিয়ালাইজেশন
-        const dateFilter = {};
-        const now = new Date();
+    const dateFilter = {};
+    const now = new Date();
+    if (startDate && endDate) {
+      dateFilter.$gte = new Date(startDate);
+      dateFilter.$lte = new Date(endDate);
+      if (dateFilter.$gte.getTime() > dateFilter.$lte.getTime()) {
+        console.warn("Start date is after end date. Using default range.");
+        dateFilter.$gte = new Date(new Date().setDate(new Date().getDate() - 30));
+        delete dateFilter.$lte;
+      }
+    } else {
+      // ----------------------------------------------------
+      // Preset time ranging if the date issues
+      // ----------------------------------------------------
+      // if the date object changes, references will keep 
+      const tempNow = new Date();
 
-        // ----------------------------------------------------
-        // 1. কাস্টম ডেট রেঞ্জ হ্যান্ডলিং
-        // ----------------------------------------------------
-        if (startDate && endDate) {
-            // যদি startDate এবং endDate থাকে, তবে কাস্টম রেঞ্জ ব্যবহার করুন
-            // (ফ্রন্টএন্ড থেকে আসা তারিখ স্ট্রিংগুলো)
-            dateFilter.$gte = new Date(startDate);
-            dateFilter.$lte = new Date(endDate);
-            
-            // নিশ্চিত করুন যে startDate, endDate এর আগে আছে। যদি না থাকে, লজিক্যালি ভুল হতে পারে।
-            if (dateFilter.$gte.getTime() > dateFilter.$lte.getTime()) {
-                // তারিখ উল্টে গেলে বা ভুল হলে একটি ত্রুটি দেওয়া যেতে পারে, বা শুধু লজিক ঠিক করা যেতে পারে
-                // নিরাপত্তার জন্য আমরা শুধু কনসোলে লগ করছি এবং $lte কে today করে দিচ্ছি
-                console.warn("Start date is after end date. Using default range.");
-                dateFilter.$gte = new Date(new Date().setDate(new Date().getDate() - 30));
-                delete dateFilter.$lte;
-            }
-        } else {
-            // ----------------------------------------------------
-            // 2. প্রিসেট টাইম রেঞ্জ হ্যান্ডলিং (যদি কাস্টম ডেট না থাকে)
-            // ----------------------------------------------------
-            
-            // গুরুত্বপূর্ণ: Date অবজেক্ট একবার পরিবর্তন হলে তার reference ধরে রাখে। 
-            // তাই প্রতিটি case-এ নতুন Date অবজেক্ট তৈরি করা উচিত, না হলে ভুল তারিখ আসবে।
-            const tempNow = new Date();
-            
-            switch (range) {
-                case '7days':
-                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 7));
-                    break;
-                case '30days':
-                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
-                    break;
-                case '6months':
-                    dateFilter.$gte = new Date(tempNow.setMonth(tempNow.getMonth() - 6));
-                    break;
-                case '1year':
-                    dateFilter.$gte = new Date(tempNow.setFullYear(tempNow.getFullYear() - 1));
-                    break;
-                default:
-                    dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
-            }
-        }
-
-        // ----------------------------------------------------
-        // ডেটা ফেচিং লজিক (dateFilter এখন কাস্টম বা প্রিসেট যেকোনো একটি)
-        // ----------------------------------------------------
-        
-        // মোট অর্ডার
-        const totalOrders = await Order.countDocuments({
-            createdAt: dateFilter
-        });
-
-        // মোট রেভিনিউ
-        const revenueData = await Order.aggregate([
-            {
-                $match: {
-                    paymentStatus: 'paid',
-                    createdAt: dateFilter
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: '$totalAmount' },
-                    averageOrderValue: { $avg: '$totalAmount' }
-                }
-            }
-        ]);
-
-        // পেন্ডিং অর্ডার
-        const pendingOrders = await Order.countDocuments({
-            status: 'pending',
-            createdAt: dateFilter
-        });
-
-        // বিভিন্ন স্ট্যাটাসের অর্ডার
-        const orderStatusCounts = await Order.aggregate([
-            {
-                $match: { createdAt: dateFilter }
-            },
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        // ----------------------------------------------------
-        // মাসিক গ্রোথ ক্যালকুলেশন (এটি বর্তমানে পুরো ফাংশনের ফিল্টারকে উপেক্ষা করছে)
-        // গ্রোথ ক্যালকুলেশনের লজিক একই রাখা হয়েছে, তবে আপনি চাইলে এটিও ফিল্টার রেঞ্জের সাথে সম্পর্কিত করতে পারেন।
-        // ----------------------------------------------------
-        
-        const currentMonth = new Date().getMonth();
-        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        const currentYear = new Date().getFullYear();
-
-        const currentMonthOrders = await Order.countDocuments({
-            $expr: {
-                $and: [
-                    { $eq: [{ $month: '$createdAt' }, currentMonth + 1] },
-                    { $eq: [{ $year: '$createdAt' }, currentYear] }
-                ]
-            }
-        });
-
-        const previousMonthOrders = await Order.countDocuments({
-            $expr: {
-                $and: [
-                    { $eq: [{ $month: '$createdAt' }, previousMonth + 1] },
-                    { $eq: [{ $year: '$createdAt' }, previousMonth === 11 ? currentYear - 1 : currentYear] }
-                ]
-            }
-        });
-
-        const orderGrowth = previousMonthOrders > 0
-            ? ((currentMonthOrders - previousMonthOrders) / previousMonthOrders * 100).toFixed(1)
-            : currentMonthOrders > 0 ? 100 : 0;
-
-        // রেসপন্স
-        res.json({
-            status: 'success',
-            data: {
-                totalOrders,
-                totalRevenue: revenueData[0]?.totalRevenue || 0,
-                averageOrderValue: revenueData[0]?.averageOrderValue || 0,
-                pendingOrders,
-                orderStatusCounts,
-                orderGrowth: parseFloat(orderGrowth),
-                
-                // এই ডেটাগুলো এখনও মক, এগুলো আপনার অন্য সোর্স থেকে আপডেট করতে হবে
-                monthlyGrowth: 12.5, 
-                totalProducts: 156,
-                totalUsers: 2453,
-                lowStockProducts: 12,
-                userGrowth: 15.2
-            }
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: error.message
-        });
+      switch (range) {
+        case '7days':
+          dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 7));
+          break;
+        case '30days':
+          dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
+          break;
+        case '6months':
+          dateFilter.$gte = new Date(tempNow.setMonth(tempNow.getMonth() - 6));
+          break;
+        case '1year':
+          dateFilter.$gte = new Date(tempNow.setFullYear(tempNow.getFullYear() - 1));
+          break;
+        default:
+          dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
+      }
     }
+
+    // ----------------------------------------------------
+    // fetch data with fetching by date
+    // ----------------------------------------------------
+
+    const totalOrders = await Order.countDocuments({
+      createdAt: dateFilter
+    });
+    const revenueData = await Order.aggregate([
+      {
+        $match: {
+          paymentStatus: 'paid',
+          createdAt: dateFilter
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          averageOrderValue: { $avg: '$totalAmount' }
+        }
+      }
+    ]);
+    const pendingOrders = await Order.countDocuments({
+      status: 'pending',
+      createdAt: dateFilter
+    });
+    const orderStatusCounts = await Order.aggregate([
+      {
+        $match: { createdAt: dateFilter }
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const currentMonth = new Date().getMonth();
+    const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const currentYear = new Date().getFullYear();
+    const currentMonthOrders = await Order.countDocuments({
+      $expr: {
+        $and: [
+          { $eq: [{ $month: '$createdAt' }, currentMonth + 1] },
+          { $eq: [{ $year: '$createdAt' }, currentYear] }
+        ]
+      }
+    });
+
+    const previousMonthOrders = await Order.countDocuments({
+      $expr: {
+        $and: [
+          { $eq: [{ $month: '$createdAt' }, previousMonth + 1] },
+          { $eq: [{ $year: '$createdAt' }, previousMonth === 11 ? currentYear - 1 : currentYear] }
+        ]
+      }
+    });
+
+    const orderGrowth = previousMonthOrders > 0
+      ? ((currentMonthOrders - previousMonthOrders) / previousMonthOrders * 100).toFixed(1)
+      : currentMonthOrders > 0 ? 100 : 0;
+    res.json({
+      status: 'success',
+      data: {
+        totalOrders,
+        totalRevenue: revenueData[0]?.totalRevenue || 0,
+        averageOrderValue: revenueData[0]?.averageOrderValue || 0,
+        pendingOrders,
+        orderStatusCounts,
+        orderGrowth: parseFloat(orderGrowth),
+
+        monthlyGrowth: 12.5,
+        totalProducts: 156,
+        totalUsers: 2453,
+        lowStockProducts: 12,
+        userGrowth: 15.2
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
 };
 
 // sales data
@@ -2600,8 +2569,6 @@ export const getSalesData = async (req, res) => {
         orders: 0
       });
     }
-
-    // মাসিক সেলস ডেটা
     const monthlySales = await Order.aggregate([
       {
         $match: {
@@ -2626,7 +2593,6 @@ export const getSalesData = async (req, res) => {
       }
     ]);
 
-    // ডেটা ম্যাপিং
     const salesData = months.map(month => {
       const monthIndex = new Date(`${month.name} 1, 2020`).getMonth() + 1;
       const found = monthlySales.find(s => s._id.month === monthIndex);
@@ -2769,9 +2735,6 @@ export const deleteOrder = async (req, res) => {
 };
 
 
-
-
-
 // ##########################################################
 // added this function for dashboard top selling products
 // ##########################################################
@@ -2835,12 +2798,45 @@ export const getTopSoldProducts = async (req, res) => {
 // ##########################################################
 export const getCampaignSalesStats = async (req, res) => {
   try {
-    // Calculate stats for orders that used a coupon
+    const { range = 'all', startDate, endDate } = req.query;
+    const dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.$gte = new Date(startDate);
+      dateFilter.$lte = new Date(endDate);
+      if (dateFilter.$gte.getTime() > dateFilter.$lte.getTime()) {
+        dateFilter.$gte = new Date(new Date().setDate(new Date().getDate() - 30));
+        delete dateFilter.$lte;
+      }
+    } else if (range !== 'all') {
+      const tempNow = new Date();
+
+      switch (range) {
+        case '7days':
+          dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 7));
+          break;
+        case '30days':
+          dateFilter.$gte = new Date(tempNow.setDate(tempNow.getDate() - 30));
+          break;
+        case '6months':
+          dateFilter.$gte = new Date(tempNow.setMonth(tempNow.getMonth() - 6));
+          break;
+        case '1year':
+          dateFilter.$gte = new Date(tempNow.setFullYear(tempNow.getFullYear() - 1));
+          break;
+        default:
+          break;
+      }
+    }
+
+    const matchConditions = {
+      couponCode: { $ne: null, $exists: true }
+    };
+    if (Object.keys(dateFilter).length > 0) {
+      matchConditions.createdAt = dateFilter;
+    }
     const campaignStats = await Order.aggregate([
       {
-        $match: {
-          couponCode: { $ne: null, $exists: true }
-        }
+        $match: matchConditions
       },
       {
         $group: {

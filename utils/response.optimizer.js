@@ -3,7 +3,7 @@ export const optimizeProductForList = (product) => {
   return {
     _id: product._id,
     title: product.title,
-    slug: product.slug,
+    slug: product.slug, 
     brand: product.brand,
     price: product.price,
     discountPercentage: product.discountPercentage,
@@ -13,7 +13,7 @@ export const optimizeProductForList = (product) => {
         _id: cv._id,
         name: cv.name,
         code: cv.code,
-        images: cv.images?.slice(0, 1) || [], // Only first image per color
+        images: cv.images?.slice(0, 1) || [], 
       })) || [],
     variants:
       product.variants?.map((v) => ({

@@ -84,6 +84,15 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      select: false, 
+    },
+    deletedAt: { 
+      type: Date,
+      select: false,
+    },
     authProvider: {
       type: String,
       enum: ["email", "google", "facebook"],

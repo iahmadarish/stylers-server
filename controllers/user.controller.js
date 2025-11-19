@@ -69,18 +69,53 @@ export const updateUser = catchAsync(async (req, res, next) => {
 // @desc    Delete user
 // @route   DELETE /api/users/:id
 // @access  Private/Admin
+// export const deleteUser = catchAsync(async (req, res, next) => {
+//   const user = await User.findByIdAndDelete(req.params.id)
+
+//   if (!user) {
+//     return next(new AppError("User not found", 404))
+//   }
+
+//   res.status(204).json({
+//     status: "success",
+//     data: null,
+//   })
+// })
+
 export const deleteUser = catchAsync(async (req, res, next) => {
-  const user = await User.findByIdAndDelete(req.params.id)
+  // Hard Delete এর পরিবর্তে Soft Delete করা হচ্ছে
+  const user = await User.findByIdAndUpdate(
+    req.params.id, 
+    { 
+      isDeleted: true,
+      deletedAt: new Date()
+    }, 
+    { 
+      new: true,
+      // runValidators: true, // Soft Delete এর জন্য runValidators দরকার নেই
+    }
+  );
 
   if (!user) {
+    // যদি ইউজার খুঁজে না পাওয়া যায়
     return next(new AppError("User not found", 404))
   }
-
-  res.status(204).json({
+  
+  // স্ট্যাটাস কোড 200 বা 204 ব্যবহার করা যেতে পারে, তবে 200 ব্যবহার করে মেসেজ পাঠানো হলো
+  res.status(200).json({
     status: "success",
-    data: null,
+    message: "User successfully deactivated (soft deleted).",
+    data: {
+      user: {
+        id: user._id,
+        name: user.name,
+        isDeleted: user.isDeleted,
+        deletedAt: user.deletedAt
+      }
+    }
   })
 })
+
 
 // @desc    Update current user profile
 // @route   PATCH /api/users/update-profile

@@ -8,6 +8,7 @@ import passport from "passport"
 import session from "express-session"
 import cron from 'node-cron';
 import Product from './models/Product.js';
+import Blog from './models/Blog.js';
 import ParentCategory from './models/ParentCategory.js';
 import SubCategory from './models/SubCategory.js';
 import { startCronJobs } from './utils/cronJobs.js';
@@ -345,6 +346,45 @@ app.get("/api/sitemap-subcategories.xml", async (req, res) => {
   }
 });
 
+
+app.get("/api/sitemap-blogs.xml", async (req, res) => {
+  try {
+    // The base URL for the blog section
+    const baseUrl = "https://paarel.com";
+    
+    // Find all active blogs, selecting only the slug and updatedAt fields
+    // Assuming your blog model has an 'isActive' or similar field for published blogs
+    const blogs = await Blog.find({ /* add filter for published/active blogs here, e.g., isActive: true */ }, "slug updatedAt");
+
+    let urls = "";
+    blogs.forEach((b) => {
+      // Construct the full URL based on your frontend path: /blog/:slug
+      const loc = `${baseUrl}/blog/${b.slug}`;
+      const lastmod = b.updatedAt.toISOString(); // Use ISO format
+      
+      urls += `
+        <url>
+          <loc>${loc}</loc>
+          <lastmod>${lastmod}</lastmod>
+          <priority>0.5</priority>
+        </url>
+      `;
+    });
+
+    // Final XML structure
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      ${urls}
+      </urlset>
+    `;
+
+    res.header("Content-Type", "application/xml");
+    res.send(sitemap);
+  } catch (error) {
+    console.error("Sitemap Error (Blogs):", error);
+    res.status(500).send("Error generating blog sitemap");
+  }
+});
 
 // 404 handler
 app.use("*", (req, res) => {

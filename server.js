@@ -347,28 +347,50 @@ app.get("/api/sitemap-subcategories.xml", async (req, res) => {
 });
 
 
+/**
+ * Converts a string (like a title) into a URL-friendly slug.
+ * @param {string} title The input string (e.g., 'Why Are Clothes So Cheap?')
+ * @returns {string} The slug (e.g., 'why-are-clothes-so-cheap')
+ */
+const generateSlug = (title) => {
+  if (!title) return ''; // Handle case where title is null/undefined
+
+  return title
+    .toLowerCase() // Convert to lowercase
+    .trim() // Remove whitespace from both ends
+    .replace(/[^\w\s-]/g, '') // Remove all non-word characters (except spaces and hyphens)
+    .replace(/[\s_-]+/g, '-') // Replace spaces and hyphens with a single hyphen
+    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+};
+
 app.get("/api/sitemap-blogs.xml", async (req, res) => {
   try {
-    // The base URL for the blog section
     const baseUrl = "https://paarel.com";
     
-    // Find all active blogs, selecting only the slug and updatedAt fields
-    // Assuming your blog model has an 'isActive' or similar field for published blogs
-    const blogs = await Blog.find({ /* add filter for published/active blogs here, e.g., isActive: true */ }, "slug updatedAt");
+    // 💡 CHANGE 1: Select 'blogTitle' instead of 'slug'
+    const blogs = await Blog.find({ /* filter for published/active */ }, "blogTitle updatedAt");
 
     let urls = "";
     blogs.forEach((b) => {
-      // Construct the full URL based on your frontend path: /blog/:slug
-      const loc = `${baseUrl}/blog/${b.slug}`;
-      const lastmod = b.updatedAt.toISOString(); // Use ISO format
+      // 💡 CHANGE 2: Generate the slug dynamically from the blogTitle
+      const dynamicSlug = generateSlug(b.blogTitle);
       
-      urls += `
-        <url>
-          <loc>${loc}</loc>
-          <lastmod>${lastmod}</lastmod>
-          <priority>0.5</priority>
-        </url>
-      `;
+      // 💡 ADD CHECK: Ensure the title exists and generates a valid slug
+      if (dynamicSlug) {
+        const loc = `${baseUrl}/blog/${dynamicSlug}`;
+        const lastmod = b.updatedAt.toISOString();
+        
+        urls += `
+          <url>
+            <loc>${loc}</loc>
+            <lastmod>${lastmod}</lastmod>
+            <priority>0.5</priority>
+          </url>
+        `;
+      } else {
+        // Log documents that are missing a title
+        console.warn(`[Sitemap Warning] Blog document is missing a valid title. ID: ${b._id}`); 
+      }
     });
 
     // Final XML structure

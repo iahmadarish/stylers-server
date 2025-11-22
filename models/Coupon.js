@@ -270,24 +270,31 @@ couponSchema.virtual('canUse').get(function() {
 
 // Method to check if user can use this coupon
 couponSchema.methods.canUserUse = function(userId) {
-  if (!this.canUse) return false;
-  
-  // Check per user limit
-  if (this.perUserLimit && this.usersUsed.includes(userId)) {
-    const userUsageCount = this.usersUsed.filter(id => id.equals(userId)).length;
-    if (userUsageCount >= this.perUserLimit) return false;
-  }
-  
-  return true;
+  if (!this.canUse) return false;
+  
+  // Check per user limit - Removed the redundant/faulty 'includes' check
+  if (this.perUserLimit) { 
+    // ✅ FIX: .filter() ব্যবহার করে নির্দিষ্ট userId কতবার আছে তা গণনা করা হচ্ছে।
+    // id && id.equals(userId) চেকটি নিশ্চিত করে যে id ভ্যালুটি null নয় এবং এটি Mongoose ObjectId-এর সাথে সঠিকভাবে তুলনা করছে।
+    const userUsageCount = this.usersUsed.filter(id => 
+        id && id.equals(userId)
+    ).length;
+    
+    console.log(`User ${userId} usage count: ${userUsageCount}. Limit: ${this.perUserLimit}`);
+    
+    if (userUsageCount >= this.perUserLimit) {
+        // যদি ব্যবহারের সীমা অতিক্রম করে
+        return false;
+    }
+  }
+  
+  return true;
 };
 
-// Method to apply coupon and track usage
 couponSchema.methods.applyCoupon = async function(userId, orderAmount) {
   if (!this.canUserUse(userId)) {
     throw new Error('Coupon cannot be used');
   }
-
-  // Calculate discount amount
   let discountAmount = 0;
   
   if (this.discountType === 'percentage') {
@@ -298,14 +305,10 @@ couponSchema.methods.applyCoupon = async function(userId, orderAmount) {
   } else {
     discountAmount = Math.min(this.value, orderAmount);
   }
-
-  // Apply custom options
   if (this.customOption === 'round-total') {
     const finalAmount = orderAmount - discountAmount;
     discountAmount = orderAmount - Math.round(finalAmount);
   }
-
-  // Update usage
   this.usedCount += 1;
   this.usersUsed.push(userId);
   await this.save();

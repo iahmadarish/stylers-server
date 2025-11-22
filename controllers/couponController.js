@@ -402,75 +402,161 @@ export const deleteCoupon = catchAsync(async (req, res, next) => {
 // });
 
 
+// export const validateCoupon = catchAsync(async (req, res, next) => {
+//   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
+  
+//   console.log('🎫 Coupon validation request:', {
+//     code,
+//     userId,
+//     orderAmount,
+//     channel,
+//     existingDiscount
+//   });
+
+//   const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
+  
+//   if (!coupon) {
+//     console.log('❌ Coupon not found or inactive:', code);
+//     // 🛑 FIX: Use direct res.status().json() instead of AppError for validation
+//     return res.status(404).json({
+//         success: false,
+//         message: "Invalid coupon code"
+//     });
+//   }
+
+// if (!coupon.isActive) {
+//     console.log('❌ Coupon found but not active:', code);
+//     return res.status(400).json({
+//         success: false,
+//         message: "Coupon is not activated yet. Please try again later."
+//     });
+//   }
+
+//   console.log('✅ Coupon found:', {
+//     code: coupon.code,
+//     minOrderAmount: coupon.minOrderAmount,
+//     discountType: coupon.discountType,
+//     value: coupon.value
+//   });
+
+//   // Validation logic
+//   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
+  
+//   if (!validation.valid) {
+//     console.log('❌ Coupon validation failed:', validation.message);
+//     // ✅ মূল FIX: MinOrderAmount-এর মেসেজটি সরাসরি 400 JSON Response-এ পাঠানো হলো।
+//     // এটি গ্লোবাল এরর হ্যান্ডলার বাইপাস করে Hang হওয়া থেকে বাঁচাবে।
+//     return res.status(400).json({
+//         success: false,
+//         message: validation.message 
+//     });
+//   }
+
+//   console.log('✅ Coupon validation passed');
+
+//   // Check total discount limit (50% rule)
+//   if (coupon.discountType === 'percentage') {
+//     const totalDiscount = existingDiscount + coupon.value;
+//     if (totalDiscount > 50) {
+//       const maxCouponDiscount = 50 - existingDiscount;
+//       console.log('❌ Total discount exceeds 50% limit');
+//       // 🛑 FIX: Use direct res.status().json()
+//       return res.status(400).json({
+//           success: false,
+//           message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
+//       });
+//     }
+//   }
+
+//   console.log('🎉 Coupon validation successful, returning response');
+
+//   res.json({ 
+//     success: true, 
+//     data: {
+//       coupon,
+//       discountAmount: validation.discountAmount,
+//       finalAmount: validation.finalAmount,
+//       totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
+//     }
+//   });
+// });
+
+
+
 export const validateCoupon = catchAsync(async (req, res, next) => {
-  const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
-  
-  console.log('🎫 Coupon validation request:', {
-    code,
-    userId,
-    orderAmount,
-    channel,
-    existingDiscount
-  });
+  const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
+  
+  console.log('🎫 Coupon validation request:', {
+    code,
+    userId,
+    orderAmount,
+    channel,
+    existingDiscount
+  });
 
-  const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
-  
-  if (!coupon) {
-    console.log('❌ Coupon not found or inactive:', code);
-    // 🛑 FIX: Use direct res.status().json() instead of AppError for validation
-    return res.status(404).json({
-        success: false,
-        message: "Invalid coupon code"
-    });
-  }
 
-  console.log('✅ Coupon found:', {
-    code: coupon.code,
-    minOrderAmount: coupon.minOrderAmount,
-    discountType: coupon.discountType,
-    value: coupon.value
-  });
+  const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+  if (!coupon) {
+    console.log('❌ Coupon not found:', code);
+    return res.status(404).json({
+        success: false,
+        message: "Invalid coupon code"
+    });
+  }
 
-  // Validation logic
-  const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
-  
-  if (!validation.valid) {
-    console.log('❌ Coupon validation failed:', validation.message);
-    // ✅ মূল FIX: MinOrderAmount-এর মেসেজটি সরাসরি 400 JSON Response-এ পাঠানো হলো।
-    // এটি গ্লোবাল এরর হ্যান্ডলার বাইপাস করে Hang হওয়া থেকে বাঁচাবে।
-    return res.status(400).json({
-        success: false,
-        message: validation.message 
-    });
-  }
 
-  console.log('✅ Coupon validation passed');
+  if (!coupon.isActive) {
+    console.log('Coupon found but not active:', code);
 
-  // Check total discount limit (50% rule)
-  if (coupon.discountType === 'percentage') {
-    const totalDiscount = existingDiscount + coupon.value;
-    if (totalDiscount > 50) {
-      const maxCouponDiscount = 50 - existingDiscount;
-      console.log('❌ Total discount exceeds 50% limit');
-      // 🛑 FIX: Use direct res.status().json()
-      return res.status(400).json({
-          success: false,
-          message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
-      });
-    }
-  }
+    return res.status(400).json({
+        success: false,
+        message: "Coupon is not activated yet. Please try again later."
+    });
+  }
+    
+  console.log('Coupon found and active:', {
+    code: coupon.code,
+    minOrderAmount: coupon.minOrderAmount,
+    discountType: coupon.discountType,
+    value: coupon.value
+  });
 
-  console.log('🎉 Coupon validation successful, returning response');
 
-  res.json({ 
-    success: true, 
-    data: {
-      coupon,
-      discountAmount: validation.discountAmount,
-      finalAmount: validation.finalAmount,
-      totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
-    }
-  });
+  const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
+
+  if (!validation.valid) {
+    console.log('Coupon validation failed:', validation.message);
+    return res.status(400).json({
+        success: false,
+        message: validation.message 
+    });
+  }
+
+  console.log('Coupon validation passed');
+
+  if (coupon.discountType === 'percentage') {
+    const totalDiscount = existingDiscount + coupon.value;
+    if (totalDiscount > 50) {
+      const maxCouponDiscount = 50 - existingDiscount;
+      console.log('Total discount exceeds 50% limit');
+      return res.status(400).json({
+          success: false,
+          message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
+      });
+    }
+  }
+
+  console.log('🎉 Coupon validation successful, returning response');
+
+  res.json({ 
+    success: true, 
+    data: {
+      coupon,
+      discountAmount: validation.discountAmount,
+      finalAmount: validation.finalAmount,
+      totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
+    }
+  });
 });
 
 // Apply coupon to order

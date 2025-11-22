@@ -1111,16 +1111,16 @@ const updateProductStock = async (orderItems) => {
         }
       }
       // Update color variant stock if colorVariantId exists
-      if (item.colorVariantId) {
-        const colorVariant = product.colorVariants.id(item.colorVariantId);
-        if (colorVariant) {
-          console.log(`Updating color variant stock: ${colorVariant.colorName}`);
-          colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity);
-          console.log(`Color variant stock updated: ${colorVariant.stock}`);
-        } else {
-          console.log(`Color variant not found: ${item.colorVariantId}`);
-        }
-      }
+      // if (item.colorVariantId) {
+      //   const colorVariant = product.colorVariants.id(item.colorVariantId);
+      //   if (colorVariant) {
+      //     console.log(`Updating color variant stock: ${colorVariant.colorName}`);
+      //     colorVariant.stock = Math.max(0, colorVariant.stock - item.quantity);
+      //     console.log(`Color variant stock updated: ${colorVariant.stock}`);
+      //   } else {
+      //     console.log(`Color variant not found: ${item.colorVariantId}`);
+      //   }
+      // }
 
       // Update main product stock
       console.log(`Updating main product stock: ${product.stock} - ${item.quantity}`);

@@ -1237,11 +1237,16 @@ export const getOrders = async (req, res) => {
     }
 
     // Order type filter
-    if (orderType === "guest") {
-      filter.isGuestOrder = true
-    } else if (orderType === "user") {
-      filter.isGuestOrder = { $ne: true }
-    }
+    if (orderType === "manual") {
+      filter.isManualOrder = true
+    } else if (orderType === "guest") {
+      filter.isGuestOrder = true
+      filter.isManualOrder = { $ne: true } 
+    } else if (orderType === "user") {
+      filter.isGuestOrder = { $ne: true } 
+      filter.isManualOrder = { $ne: true } 
+    } else {
+    }
 
     // Date range filter (NEW)
     if (fromDate || toDate) {

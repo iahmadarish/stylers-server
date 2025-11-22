@@ -2243,6 +2243,7 @@ export const createManualOrder = async (req, res) => {
 
     // ✅ CHANGE: Create manual order with coupon data
     const orderData = {
+      isManualOrder: true,
       isGuestOrder: customerType === "guest",
       orderNumber,
       items: orderItems,

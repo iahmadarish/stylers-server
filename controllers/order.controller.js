@@ -368,7 +368,7 @@ export const createOrder = async (req, res) => {
       try {
         await Coupon.findByIdAndUpdate(validatedCoupon._id, {
           $inc: { usedCount: 1 },
-          $addToSet: { usersUsed: userId }
+          $push: { usersUsed: userId }
         });
         console.log("✅ Coupon usage tracked:", validatedCoupon.code);
       } catch (trackError) {
@@ -1007,12 +1007,11 @@ export const createGuestOrder = async (req, res) => {
 
     await order.save();
 
-    // ✅ CHANGE: গেস্ট ইউজারের জন্য কুপন ইউসেজ ট্র্যাক করুন
+
     if (validatedCoupon && finalCouponDiscount > 0) {
       try {
         await Coupon.findByIdAndUpdate(validatedCoupon._id, {
           $inc: { usedCount: 1 }
-          // গেস্ট ইউজারなので usersUsed-এ add করা যাবে না
         });
         console.log("✅ Guest coupon usage tracked:", validatedCoupon.code);
       } catch (trackError) {
@@ -2296,7 +2295,7 @@ export const createManualOrder = async (req, res) => {
       try {
         await Coupon.findByIdAndUpdate(validatedCoupon._id, {
           $inc: { usedCount: 1 },
-          $addToSet: { usersUsed: customerType === "user" ? userId : null }
+          $push: { usersUsed: customerType === "user" ? userId : null }
         });
         console.log("✅ Manual order coupon usage tracked:", validatedCoupon.code);
       } catch (trackError) {

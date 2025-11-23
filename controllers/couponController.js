@@ -483,6 +483,199 @@ export const deleteCoupon = catchAsync(async (req, res, next) => {
 
 
 
+// export const validateCoupon = catchAsync(async (req, res, next) => {
+//   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
+//   
+//   console.log('🎫 Coupon validation request:', {
+//     code,
+//     userId,
+//     orderAmount,
+//     channel,
+//     existingDiscount
+//   });
+
+
+//   const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+//   if (!coupon) {
+//     console.log('❌ Coupon not found:', code);
+//     return res.status(404).json({
+//         success: false,
+//         message: "Invalid coupon code"
+//     });
+//   }
+
+
+//   if (!coupon.isActive) {
+//     console.log('Coupon found but not active:', code);
+
+//     return res.status(400).json({
+//         success: false,
+//         message: "Coupon is not activated yet. Please try again later."
+//     });
+//   }
+    
+//   console.log('Coupon found and active:', {
+//     code: coupon.code,
+//     minOrderAmount: coupon.minOrderAmount,
+//     discountType: coupon.discountType,
+//     value: coupon.value
+//   });
+
+
+//   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
+
+//   if (!validation.valid) {
+//     console.log('Coupon validation failed:', validation.message);
+//     return res.status(400).json({
+//         success: false,
+//         message: validation.message 
+//     });
+//   }
+
+//   console.log('Coupon validation passed');
+
+//   if (coupon.discountType === 'percentage') {
+//     const totalDiscount = existingDiscount + coupon.value;
+//     if (totalDiscount > 50) {
+//       const maxCouponDiscount = 50 - existingDiscount;
+//       console.log('Total discount exceeds 50% limit');
+//       return res.status(400).json({
+//           success: false,
+//           message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
+//       });
+//     }
+//   }
+
+//   console.log('🎉 Coupon validation successful, returning response');
+
+//   res.json({ 
+//     success: true, 
+//     data: {
+//       coupon,
+//       discountAmount: validation.discountAmount,
+//       finalAmount: validation.finalAmount,
+//       totalDiscountPercentage: coupon.discountType === 'percentage' ? existingDiscount + coupon.value : existingDiscount
+//     }
+//   });
+// });
+
+// Apply coupon to order
+// export const applyCoupon = catchAsync(async (req, res, next) => {
+//   const { orderId, couponCode, userId, orderAmount, existingDiscount = 0 } = req.body;
+  
+//   const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
+  
+//   if (!coupon) {
+//     return next(new AppError("Invalid coupon code", 404));
+//   }
+
+//   // Validate coupon
+//   const validation = await validateCouponLogic(coupon, userId, orderAmount, 'web');
+  
+//   if (!validation.valid) {
+//     return next(new AppError(validation.message, 400));
+//   }
+
+//   // Check total discount limit (50% rule)
+//   if (coupon.discountType === 'percentage') {
+//     const totalDiscount = existingDiscount + coupon.value;
+//     if (totalDiscount > 50) {
+//       return next(new AppError("Total discount cannot exceed 50%", 400));
+//     }
+//   }
+
+//   // Record coupon usage
+//   const couponUsage = new CouponUsage({
+//     coupon: coupon._id,
+//     user: userId,
+//     order: orderId,
+//     discountAmount: validation.discountAmount
+//   });
+//   await couponUsage.save();
+
+//   // Update coupon used count
+//   await Coupon.findByIdAndUpdate(coupon._id, {
+//     $inc: { usedCount: 1 },
+//     $addToSet: { usersUsed: userId }
+//   });
+
+//   res.json({ 
+//     success: true, 
+//     data: {
+//       coupon,
+//       discountAmount: validation.discountAmount,
+//       finalAmount: validation.finalAmount,
+//       usageRecord: couponUsage
+//     }
+//   });
+// });
+
+
+// controllers/couponController.js
+
+export const applyCoupon = catchAsync(async (req, res, next) => {
+  const { orderId, couponCode, userId, orderAmount, existingDiscount = 0 } = req.body;
+  
+  const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
+  
+  if (!coupon) {
+    // কুপন না পাওয়া গেলে বা ইনঅ্যাক্টিভ হলে
+    return next(new AppError("Invalid coupon code", 404));
+  }
+
+  // 1. ✅ FIX: কুপন প্রয়োগের আগে ব্যবহারকারীর ব্যবহারের সীমা (perUserLimit) চেক করুন
+  if (userId) {
+    if (!coupon.canUserUse(userId)) {
+      // যদি canUserUse ব্যর্থ হয় (যেমন: perUserLimit অতিক্রম করে), 
+      // তবে নির্দিষ্ট এরর মেসেজ দেখান
+      return next(new AppError("Your coupon uses limit end.", 400));
+    }
+  }
+
+  // Validate coupon (Min Order Amount, Expiry, etc.)
+  const validation = await validateCouponLogic(coupon, userId, orderAmount, 'web');
+  
+  if (!validation.valid) {
+    return next(new AppError(validation.message, 400));
+  }
+
+  // Check total discount limit (50% rule)
+  if (coupon.discountType === 'percentage') {
+    const totalDiscount = existingDiscount + coupon.value;
+    if (totalDiscount > 50) {
+      return next(new AppError("Total discount cannot exceed 50%", 400));
+    }
+  }
+
+  // 2. Record coupon usage and update used count
+  // এই লজিকটি এখন ঠিক আছে, কারণ perUserLimit চেক পাস করে এসেছে।
+  
+  // Record coupon usage
+  const couponUsage = new CouponUsage({
+    coupon: coupon._id,
+    user: userId,
+    order: orderId,
+    discountAmount: validation.discountAmount
+  });
+  await couponUsage.save();
+
+  // Update coupon used count and usersUsed array
+  await Coupon.findByIdAndUpdate(coupon._id, {
+    $inc: { usedCount: 1 },
+    $push: { usersUsed: userId } 
+  });
+
+  res.json({ 
+    success: true, 
+    data: {
+      coupon,
+      discountAmount: validation.discountAmount,
+      finalAmount: validation.finalAmount,
+      usageRecord: couponUsage
+    }
+  });
+});
+
 export const validateCoupon = catchAsync(async (req, res, next) => {
   const { code, userId, orderAmount, channel = 'web', existingDiscount = 0 } = req.body;
   
@@ -494,8 +687,9 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
     existingDiscount
   });
 
-
+  // 1. কুপনটি খুঁজুন (isActive চেক না করেই)
   const coupon = await Coupon.findOne({ code: code.toUpperCase() });
+  
   if (!coupon) {
     console.log('❌ Coupon not found:', code);
     return res.status(404).json({
@@ -504,41 +698,68 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
     });
   }
 
-
+  // 2. ইনঅ্যাক্টিভ স্ট্যাটাস চেক
   if (!coupon.isActive) {
-    console.log('Coupon found but not active:', code);
-
+    console.log('❌ Coupon found but not active:', code);
     return res.status(400).json({
         success: false,
         message: "Coupon is not activated yet. Please try again later."
     });
   }
     
-  console.log('Coupon found and active:', {
+  // 3. ✅ FIX: ব্যবহারকারী-নির্দিষ্ট ব্যবহারের সীমা (perUserLimit) চেক
+  if (userId) { // userId থাকতে হবে এই চেক করার জন্য
+    const userUsageCount = coupon.usersUsed.filter(id => 
+        id && id.equals(userId)
+    ).length;
+    
+    // যদি perUserLimit সেট করা থাকে এবং ব্যবহারকারী সীমা অতিক্রম করে
+    if (coupon.perUserLimit > 0 && userUsageCount >= coupon.perUserLimit) {
+      console.log(`❌ User ${userId} has exceeded the usage limit for coupon ${code}`);
+      return res.status(400).json({
+          success: false,
+          // ✅ আপনার চাওয়া মেসেজ
+          message: "Your coupon uses limit end." 
+      });
+    }
+  }
+
+  // 4. সাধারণ ব্যবহার সীমা (expiry, total usage limit) চেক
+  // canUse ভার্চুয়াল ফিল্ড সমস্ত সাধারণ ভ্যালিডেশন চেক করে।
+  if (!coupon.canUse) {
+    console.log('❌ Coupon not valid due to general limits (expiry or total usage limit).');
+    return res.status(400).json({
+        success: false,
+        message: "Coupon is expired or its general usage limit has been reached."
+    });
+  }
+
+  console.log('✅ Coupon found:', {
     code: coupon.code,
     minOrderAmount: coupon.minOrderAmount,
     discountType: coupon.discountType,
     value: coupon.value
   });
 
-
+  // 5. অন্যান্য ভ্যালিডেশন লজিক (Min Order Amount, Channel ইত্যাদি)
   const validation = await validateCouponLogic(coupon, userId, orderAmount, channel);
-
+  
   if (!validation.valid) {
-    console.log('Coupon validation failed:', validation.message);
+    console.log('❌ Coupon validation failed:', validation.message);
     return res.status(400).json({
         success: false,
         message: validation.message 
     });
   }
 
-  console.log('Coupon validation passed');
+  console.log('✅ Coupon validation passed');
 
+  // Check total discount limit (50% rule)
   if (coupon.discountType === 'percentage') {
     const totalDiscount = existingDiscount + coupon.value;
     if (totalDiscount > 50) {
       const maxCouponDiscount = 50 - existingDiscount;
-      console.log('Total discount exceeds 50% limit');
+      console.log('❌ Total discount exceeds 50% limit');
       return res.status(400).json({
           success: false,
           message: `Total discount cannot exceed 50%. You can get maximum ${maxCouponDiscount}% coupon discount`
@@ -558,58 +779,6 @@ export const validateCoupon = catchAsync(async (req, res, next) => {
     }
   });
 });
-
-// Apply coupon to order
-export const applyCoupon = catchAsync(async (req, res, next) => {
-  const { orderId, couponCode, userId, orderAmount, existingDiscount = 0 } = req.body;
-  
-  const coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), isActive: true });
-  
-  if (!coupon) {
-    return next(new AppError("Invalid coupon code", 404));
-  }
-
-  // Validate coupon
-  const validation = await validateCouponLogic(coupon, userId, orderAmount, 'web');
-  
-  if (!validation.valid) {
-    return next(new AppError(validation.message, 400));
-  }
-
-  // Check total discount limit (50% rule)
-  if (coupon.discountType === 'percentage') {
-    const totalDiscount = existingDiscount + coupon.value;
-    if (totalDiscount > 50) {
-      return next(new AppError("Total discount cannot exceed 50%", 400));
-    }
-  }
-
-  // Record coupon usage
-  const couponUsage = new CouponUsage({
-    coupon: coupon._id,
-    user: userId,
-    order: orderId,
-    discountAmount: validation.discountAmount
-  });
-  await couponUsage.save();
-
-  // Update coupon used count
-  await Coupon.findByIdAndUpdate(coupon._id, {
-    $inc: { usedCount: 1 },
-    $addToSet: { usersUsed: userId }
-  });
-
-  res.json({ 
-    success: true, 
-    data: {
-      coupon,
-      discountAmount: validation.discountAmount,
-      finalAmount: validation.finalAmount,
-      usageRecord: couponUsage
-    }
-  });
-});
-
 // Get coupon usage history
 export const getCouponUsage = catchAsync(async (req, res, next) => {
   const { couponId } = req.params;

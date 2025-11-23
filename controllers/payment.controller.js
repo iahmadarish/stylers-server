@@ -541,18 +541,17 @@ export const createCODOrder = async (req, res) => {
       await order.save()
       console.log("✅ Order created successfully:", order._id)
 
-      // ✅ CHANGE 5: কুপন ইউসেজ ট্র্যাক করুন
       if (validatedCoupon && finalCouponDiscount > 0) {
-        try {
-          await Coupon.findByIdAndUpdate(validatedCoupon._id, {
-            $inc: { usedCount: 1 },
-            $addToSet: { usersUsed: userId }
-          });
-          console.log("✅ Coupon usage tracked:", validatedCoupon.code);
-        } catch (trackError) {
-          console.error("❌ Error tracking coupon usage:", trackError);
-        }
-      }
+  try {
+    await Coupon.findByIdAndUpdate(validatedCoupon._id, {
+      $inc: { usedCount: 1 },
+      $push: { usersUsed: userId } 
+    });
+    console.log("✅ Coupon usage tracked:", validatedCoupon.code);
+  } catch (trackError) {
+    console.error("❌ Error tracking coupon usage:", trackError);
+  }
+}
 
     } catch (saveError) {
       console.error("Error saving order:", saveError)
@@ -788,7 +787,7 @@ export const initializeAamarpayPayment = async (req, res) => {
       try {
         await Coupon.findByIdAndUpdate(validatedCoupon._id, {
           $inc: { usedCount: 1 },
-          $addToSet: { usersUsed: userId }
+          $push: { usersUsed: userId }
         });
         console.log("✅ Coupon usage tracked:", validatedCoupon.code);
       } catch (trackError) {
